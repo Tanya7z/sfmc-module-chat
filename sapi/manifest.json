@@ -1,0 +1,85 @@
+{
+  "$schema": "https://cdn.jsdelivr.net/gh/DogeLakeDev/ScriptsForMinecraftServer@latest/modules/sdk/%40sfmc-sdk/schemas/sapi-manifest.v2.schema.json",
+  "schemaVersion": 2,
+  "id": "chat",
+  "name": "聊天管道",
+  "configKey": "chat",
+  "enabledByDefault": true,
+  "canDisable": true,
+  "requires": ["economy"],
+  "permissions": [
+    "config:read:chat",
+    "db:read:sfmc_chat_channels",
+    "db:write:sfmc_chat_channels",
+    "db:read:sfmc_chat_messages",
+    "db:write:sfmc_chat_messages",
+    "db:read:sfmc_chat_redpackets",
+    "db:write:sfmc_chat_redpackets",
+    "db:read:sfmc_chat_avatars",
+    "db:write:sfmc_chat_avatars",
+    "db:read:sfmc_players",
+    "db:write:sfmc_players",
+    "command:chat",
+    "command:tell",
+    "command:channel",
+    "command:ch",
+    "command:msg",
+    "command:lo",
+    "command:tp",
+    "command:hongbao",
+    "command:hb",
+    "service:chat.openChannelPanel",
+    "service:chat.openRedPacketPanel",
+    "service:chat.openPrivatePanel",
+    "service:chat.send",
+    "service:chat.broadcast",
+    "service:chat.registerInterceptor",
+    "service:chat.onMessage",
+    "service:economy.account.credit",
+    "service:economy.account.debit"
+  ],
+  "services": {
+    "provides": [
+      {
+        "name": "chat.openChannelPanel",
+        "input": { "type": "object" },
+        "output": { "type": "object" }
+      },
+      {
+        "name": "chat.openRedPacketPanel",
+        "input": { "type": "object" },
+        "output": { "type": "object" }
+      },
+      {
+        "name": "chat.openPrivatePanel",
+        "input": { "type": "object" },
+        "output": { "type": "object" }
+      },
+      {
+        "name": "chat.send",
+        "input": { "type": "object" },
+        "output": { "type": "object" }
+      },
+      {
+        "name": "chat.broadcast",
+        "input": { "type": "object" },
+        "output": { "type": "object" }
+      },
+      {
+        "name": "chat.registerInterceptor",
+        "input": { "type": "object" },
+        "output": { "type": "object" }
+      },
+      {
+        "name": "chat.onMessage",
+        "input": { "type": "object" },
+        "output": { "type": "object" }
+      }
+    ],
+    "requires": [
+      { "name": "economy.account.credit" },
+      { "name": "economy.account.debit" }
+    ]
+  },
+  "notes": "独占 beforeEvents.chatSend；interceptor/onMessage；broadcast/send；!chat/!tell。"
+}
