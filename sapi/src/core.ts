@@ -4,7 +4,7 @@
 
 import { Player, world } from "@minecraft/server";
 import { db } from "@sfmc-bds/sdk/sapi/db";
-import { Command, Msg, debug } from "@sfmc-bds/sdk/sapi/runtime";
+import { Msg, debug } from "@sfmc-bds/sdk/sapi/runtime";
 import { decorateMessageContent, formatChatLine } from "./format.js";
 import { runObservers } from "./pipeline.js";
 
@@ -18,13 +18,19 @@ const activeChannel = new Map<string, string>();
 let titlePrefix = "";
 let colorCodes = true;
 
-export function setChatStyle(opts: { titlePrefix?: string; colorCodes?: boolean }): void {
+export function setChatStyle(opts: {
+  titlePrefix?: string;
+  colorCodes?: boolean;
+}): void {
   if (typeof opts.titlePrefix === "string") titlePrefix = opts.titlePrefix;
   if (typeof opts.colorCodes === "boolean") colorCodes = opts.colorCodes;
 }
 
 export async function ensureDefaultChannels(): Promise<void> {
-  const existing = await db.get<{ id: string }>(CHANNELS_TABLE, DEFAULT_CHANNEL);
+  const existing = await db.get<{ id: string }>(
+    CHANNELS_TABLE,
+    DEFAULT_CHANNEL,
+  );
   if (existing) return;
   await db.tx(async (tx) => {
     await tx.insert(CHANNELS_TABLE, {
@@ -77,7 +83,10 @@ export async function persistMessage(row: {
       });
     });
   } catch (err) {
-    debug.w("CHAT", `persist: ${err instanceof Error ? err.message : String(err)}`);
+    debug.w(
+      "CHAT",
+      `persist: ${err instanceof Error ? err.message : String(err)}`,
+    );
   }
   return id;
 }
@@ -169,18 +178,12 @@ export async function broadcast(opts: {
   return { ok: true };
 }
 
-export async function handlePlayerChat(player: Player, message: string): Promise<void> {
+export async function handlePlayerChat(
+  player: Player,
+  message: string,
+): Promise<void> {
   const channelId = getActiveChannelId(player.id);
   await deliverChannelMessage(player, channelId, message);
-}
-
-/** 命令路由：若已注册则交给 Command.trigger（仅首 token）。 */
-export function tryDispatchCommand(player: Player, message: string): boolean {
-  const name = message.slice(1).trim().split(/\s+/)[0];
-  if (!name) return false;
-  if (!Command.has(name)) return false;
-  Command.trigger(player, name);
-  return true;
 }
 
 export function findPlayerByName(name: string): Player | undefined {

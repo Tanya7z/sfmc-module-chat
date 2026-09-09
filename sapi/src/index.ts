@@ -21,9 +21,7 @@ import {
   handlePlayerChat,
   sendPrivate,
   setChatStyle,
-  tryDispatchCommand,
 } from "./core.js";
-import { isCommandPrefix } from "./format.js";
 import {
   clearPipeline,
   registerInterceptor,
@@ -90,6 +88,96 @@ async function defineTables(): Promise<void> {
   });
 }
 
+function registerCommands(): void {
+  Command.register(
+    "chat",
+    "chat.use",
+    (player) => {
+      if (player) void openChannelPanel(player);
+    },
+    "打开聊天/频道面板",
+    MODULE_ID,
+  );
+  Command.register(
+    "tell",
+    "chat.use",
+    (player) => {
+      if (player) void openPrivatePanel(player);
+    },
+    "打开私聊面板",
+    MODULE_ID,
+  );
+  Command.register(
+    "channel",
+    "chat.use",
+    (player) => {
+      if (player) void openChannelPanel(player);
+    },
+    "频道管理",
+    MODULE_ID,
+  );
+  Command.register(
+    "ch",
+    "chat.use",
+    (player) => {
+      if (!player) return;
+      const current = getActiveChannelId(player.id);
+      Msg.info(`当前频道: ${current}`, player);
+    },
+    "快速提示当前频道",
+    MODULE_ID,
+  );
+  Command.register(
+    "msg",
+    "chat.use",
+    (player) => {
+      if (player) void openPrivatePanel(player);
+    },
+    "快捷私聊",
+    MODULE_ID,
+  );
+  Command.register(
+    "lo",
+    "chat.use",
+    (player) => {
+      if (player) void shareLocation(player);
+    },
+    "分享坐标",
+    MODULE_ID,
+  );
+  Command.register(
+    "tp",
+    "chat.use",
+    (player) => {
+      if (player) void sendTeleportInvite(player);
+    },
+    "传送邀请",
+    MODULE_ID,
+  );
+  Command.register(
+    "hongbao",
+    "chat.use",
+    (player) => {
+      if (player) void openRedPacketPanel(player);
+    },
+    "红包面板",
+    MODULE_ID,
+  );
+  Command.register(
+    "hb",
+    "chat.use",
+    (player) => {
+      if (!player) return;
+      // 快捷：领取最近红包
+      void claimRedPacket(player);
+    },
+    "领取最近红包",
+    MODULE_ID,
+  );
+}
+
+registerCommands();
+
 ModuleRegistry.register({
   id: MODULE_ID,
   afterWorldLoad: false,
@@ -97,92 +185,6 @@ ModuleRegistry.register({
     registerPermissions() {
       Permission.register("chat.use", Permission.Member);
       Permission.register("chat.admin", Permission.OP);
-    },
-    registerCommands() {
-      Command.register(
-        "chat",
-        "chat.use",
-        (player) => {
-          if (player) void openChannelPanel(player);
-        },
-        "打开聊天/频道面板",
-        MODULE_ID,
-      );
-      Command.register(
-        "tell",
-        "chat.use",
-        (player) => {
-          if (player) void openPrivatePanel(player);
-        },
-        "打开私聊面板",
-        MODULE_ID,
-      );
-      Command.register(
-        "channel",
-        "chat.use",
-        (player) => {
-          if (player) void openChannelPanel(player);
-        },
-        "频道管理",
-        MODULE_ID,
-      );
-      Command.register(
-        "ch",
-        "chat.use",
-        (player) => {
-          if (!player) return;
-          setActiveChannelIdToggle(player);
-        },
-        "快速提示当前频道",
-        MODULE_ID,
-      );
-      Command.register(
-        "msg",
-        "chat.use",
-        (player) => {
-          if (player) void openPrivatePanel(player);
-        },
-        "快捷私聊",
-        MODULE_ID,
-      );
-      Command.register(
-        "lo",
-        "chat.use",
-        (player) => {
-          if (player) void shareLocation(player);
-        },
-        "分享坐标",
-        MODULE_ID,
-      );
-      Command.register(
-        "tp",
-        "chat.use",
-        (player) => {
-          if (player) void sendTeleportInvite(player);
-        },
-        "传送邀请",
-        MODULE_ID,
-      );
-      Command.register(
-        "hongbao",
-        "chat.use",
-        (player) => {
-          if (player) void openRedPacketPanel(player);
-        },
-        "红包面板",
-        MODULE_ID,
-      );
-      Command.register(
-        "hb",
-        "chat.use",
-        (player) => {
-          if (!player) return;
-          // 快捷：领取最近红包
-          void claimRedPacket(player);
-        },
-        "领取最近红包",
-        MODULE_ID,
-      );
     },
     registerEvents() {
       // 独占接管原生聊天
@@ -192,13 +194,6 @@ ModuleRegistry.register({
 
         // 始终取消原生广播，由本模块管道接管
         event.cancel = true;
-
-        if (isCommandPrefix(message)) {
-          if (tryDispatchCommand(player, message)) return;
-          // 未注册命令：仍不进入公屏（避免泄露）
-          Msg.error("未知的命令! 发送'!help'查询所有指令。", player);
-          return;
-        }
 
         void (async () => {
           const consumed = await runInterceptors(player, message);
@@ -257,7 +252,9 @@ ModuleRegistry.register({
           const content = String(input.content ?? "");
           if (!content) return { ok: false };
           const targetId =
-            typeof input.targetPlayerId === "string" ? input.targetPlayerId : undefined;
+            typeof input.targetPlayerId === "string"
+              ? input.targetPlayerId
+              : undefined;
           if (targetId) {
             const sender = findPlayer(String(input.senderId ?? ""));
             const target = findPlayer(targetId);
@@ -270,7 +267,11 @@ ModuleRegistry.register({
             return deliverChannelMessage(sender, channelId, content);
           }
           // 系统代发
-          return broadcast({ content, channelId, prefix: String(input.senderName ?? "系统") });
+          return broadcast({
+            content,
+            channelId,
+            prefix: String(input.senderName ?? "系统"),
+          });
         }),
       );
       unprovide.push(
@@ -278,7 +279,8 @@ ModuleRegistry.register({
           broadcast({
             content: String(input.content ?? ""),
             prefix: typeof input.prefix === "string" ? input.prefix : undefined,
-            channelId: typeof input.channelId === "string" ? input.channelId : undefined,
+            channelId:
+              typeof input.channelId === "string" ? input.channelId : undefined,
           }),
         ),
       );

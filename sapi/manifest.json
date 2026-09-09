@@ -6,9 +6,7 @@
   "configKey": "chat",
   "enabledByDefault": true,
   "canDisable": true,
-  "requires": [
-    "economy"
-  ],
+  "requires": ["economy"],
   "permissions": [
     "config:read:chat",
     "db:read:sfmc_chat_channels",
@@ -106,5 +104,5 @@
       }
     ]
   },
-  "notes": "独占 beforeEvents.chatSend；interceptor/onMessage；broadcast/send；!chat/!tell。"
+  "notes": "独占 beforeEvents.chatSend；interceptor/onMessage；broadcast/send；原生 chat/tell 命令。"
 }

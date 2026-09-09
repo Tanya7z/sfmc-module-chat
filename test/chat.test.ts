@@ -1,11 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import {
-  decorateMessageContent,
-  extractCommandName,
-  formatChatLine,
-  isCommandPrefix,
-} from "../sapi/src/format.ts";
+import { decorateMessageContent, formatChatLine } from "../sapi/src/format.ts";
 import {
   clearPipeline,
   interceptorCount,
@@ -15,13 +10,6 @@ import {
 } from "../sapi/src/pipeline.ts";
 
 describe("chat format", () => {
-  it("命令前缀 ! / ！", () => {
-    assert.equal(isCommandPrefix("!help"), true);
-    assert.equal(isCommandPrefix("！menu"), true);
-    assert.equal(isCommandPrefix("hello"), false);
-    assert.equal(extractCommandName("!tell Steve"), "tell");
-  });
-
   it("formatChatLine", () => {
     const line = formatChatLine({
       senderName: "Ada",
