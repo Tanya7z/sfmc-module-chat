@@ -2,5 +2,7 @@
   "default_channel_id": "global",
   "default_channel_name": "公共频道",
   "title_prefix": "",
-  "color_codes": true
+  "color_codes": true,
+  "avatar_glyphs_enabled": false,
+  "bridge_poll_ticks": 600
 }

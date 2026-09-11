@@ -5,22 +5,32 @@
 import { Player, world } from "@minecraft/server";
 import { config } from "@sfmc-bds/sdk/sapi/config";
 import { db } from "@sfmc-bds/sdk/sapi/db";
-import { ModuleRegistry } from "@sfmc-bds/sdk/module-loader";
-import { Command, debug, Msg, Permission } from "@sfmc-bds/sdk/sapi/runtime";
+import { ConfigManager, ModuleRegistry } from "@sfmc-bds/sdk/module-loader";
+import {
+  Command,
+  debug,
+  Permission,
+  registerSystemMsgHandler,
+} from "@sfmc-bds/sdk/sapi/runtime";
 import { service } from "@sfmc-bds/sdk/sapi/service";
 import {
   AVATARS_TABLE,
   CHANNELS_TABLE,
   MESSAGES_TABLE,
-  REDPACKETS_TABLE,
   broadcast,
   clearActiveChannels,
+  clearPlayerChatState,
   deliverChannelMessage,
   ensureDefaultChannels,
   getActiveChannelId,
   handlePlayerChat,
+  loadChannelHistory,
+  loadPlayerPreferences,
+  sendSystemMessage,
   sendPrivate,
   setChatStyle,
+  startBridgePolling,
+  stopBridgePolling,
 } from "./core.js";
 import {
   clearPipeline,
@@ -31,11 +41,15 @@ import {
 import {
   openChannelPanel,
   openPrivatePanel,
-  openRedPacketPanel,
+  cycleActiveChannel,
   sendTeleportInvite,
   shareLocation,
 } from "./panels.js";
-import { claimRedPacket } from "./redpacket.js";
+import {
+  clearAvatarCache,
+  setAvatarGlyphsEnabled,
+  warmAvatarCache,
+} from "./avatar.js";
 
 const MODULE_ID = "chat";
 
@@ -55,7 +69,8 @@ async function defineTables(): Promise<void> {
     owner_id: { type: "TEXT", default: "" },
     allow_chat: { type: "INTEGER", default: 1 },
     slow_mode: { type: "INTEGER", default: 0 },
-    is_broadcast: { type: "INTEGER", default: 1 },
+    is_broadcast: { type: "INTEGER", default: 0 },
+    members_json: { type: "TEXT", default: "[]" },
   });
   await db.defineTable(MESSAGES_TABLE, {
     id: { type: "TEXT", primary: true },
@@ -66,25 +81,15 @@ async function defineTables(): Promise<void> {
     content: { type: "TEXT", default: "" },
     attachment: { type: "TEXT", default: "" },
     created_at: { type: "INTEGER", default: 0, index: true },
-  });
-  await db.defineTable(REDPACKETS_TABLE, {
-    id: { type: "TEXT", primary: true },
-    sender_id: { type: "TEXT", default: "" },
-    sender_name: { type: "TEXT", default: "" },
-    total_amount: { type: "INTEGER", default: 0 },
-    remain_amount: { type: "INTEGER", default: 0 },
-    total_count: { type: "INTEGER", default: 0 },
-    remain_count: { type: "INTEGER", default: 0 },
-    claimants_json: { type: "TEXT", default: "[]" },
-    expires_at: { type: "INTEGER", default: 0 },
-    created_at: { type: "INTEGER", default: 0 },
+    show_timestamp: { type: "INTEGER", default: 0 },
   });
   await db.defineTable(AVATARS_TABLE, {
-    id: { type: "TEXT", primary: true },
-    player_id: { type: "TEXT", notNull: true, index: true },
+    player_id: { type: "TEXT", primary: true },
+    player_name: { type: "TEXT", default: "" },
     slot: { type: "INTEGER", default: 0 },
     skin_hash: { type: "TEXT", default: "" },
-    dirty: { type: "INTEGER", default: 0 },
+    dirty: { type: "INTEGER", default: 1 },
+    updated_at: { type: "INTEGER", default: 0 },
   });
 }
 
@@ -108,32 +113,13 @@ function registerCommands(): void {
     MODULE_ID,
   );
   Command.register(
-    "channel",
-    "chat.use",
-    (player) => {
-      if (player) void openChannelPanel(player);
-    },
-    "频道管理",
-    MODULE_ID,
-  );
-  Command.register(
-    "ch",
+    "c",
     "chat.use",
     (player) => {
       if (!player) return;
-      const current = getActiveChannelId(player.id);
-      Msg.info(`当前频道: ${current}`, player);
+      void cycleActiveChannel(player);
     },
-    "快速提示当前频道",
-    MODULE_ID,
-  );
-  Command.register(
-    "msg",
-    "chat.use",
-    (player) => {
-      if (player) void openPrivatePanel(player);
-    },
-    "快捷私聊",
+    "快速切换频道",
     MODULE_ID,
   );
   Command.register(
@@ -152,26 +138,6 @@ function registerCommands(): void {
       if (player) void sendTeleportInvite(player);
     },
     "传送邀请",
-    MODULE_ID,
-  );
-  Command.register(
-    "hongbao",
-    "chat.use",
-    (player) => {
-      if (player) void openRedPacketPanel(player);
-    },
-    "红包面板",
-    MODULE_ID,
-  );
-  Command.register(
-    "hb",
-    "chat.use",
-    (player) => {
-      if (!player) return;
-      // 快捷：领取最近红包
-      void claimRedPacket(player);
-    },
-    "领取最近红包",
     MODULE_ID,
   );
 }
@@ -208,6 +174,36 @@ ModuleRegistry.register({
           /* ignore */
         }
       });
+
+      const leaveCb = world.afterEvents.playerLeave.subscribe((event) => {
+        clearPlayerChatState(event.playerId);
+      });
+      eventCleanups.push(() => {
+        try {
+          world.afterEvents.playerLeave.unsubscribe(leaveCb);
+        } catch {
+          /* ignore */
+        }
+      });
+
+      const spawnCb = world.afterEvents.playerSpawn.subscribe((event) => {
+        if (!event.initialSpawn) return;
+        void (async () => {
+          await warmAvatarCache(event.player);
+          await loadPlayerPreferences(event.player);
+          await loadChannelHistory(
+            event.player,
+            getActiveChannelId(event.player.id),
+          );
+        })();
+      });
+      eventCleanups.push(() => {
+        try {
+          world.afterEvents.playerSpawn.unsubscribe(spawnCb);
+        } catch {
+          /* ignore */
+        }
+      });
     },
     async init() {
       const prefix = await config.get<string>("title_prefix");
@@ -216,23 +212,29 @@ ModuleRegistry.register({
         titlePrefix: typeof prefix === "string" ? prefix : "",
         colorCodes: typeof colors === "boolean" ? colors : true,
       });
+      setAvatarGlyphsEnabled(
+        (await config.get<boolean>("avatar_glyphs_enabled")) === true,
+      );
 
       await defineTables();
       await ensureDefaultChannels();
+      startBridgePolling(
+        ConfigManager.getSetting("bridge_channel_id", ""),
+        (await config.get<number>("bridge_poll_ticks")) ?? 600,
+      );
+      for (const player of world.getAllPlayers()) {
+        await warmAvatarCache(player);
+        await loadPlayerPreferences(player);
+      }
+      registerSystemMsgHandler((player, text) => {
+        void sendSystemMessage(player, text);
+      });
 
       unprovide.push(
         service.provide("chat.openChannelPanel", async (input) => {
           const p = findPlayer(String(input.playerId ?? ""));
           if (!p) return { ok: false };
           await openChannelPanel(p);
-          return { ok: true };
-        }),
-      );
-      unprovide.push(
-        service.provide("chat.openRedPacketPanel", async (input) => {
-          const p = findPlayer(String(input.playerId ?? ""));
-          if (!p) return { ok: false };
-          await openRedPacketPanel(p);
           return { ok: true };
         }),
       );
@@ -329,12 +331,9 @@ ModuleRegistry.register({
       for (const c of eventCleanups.splice(0, eventCleanups.length)) c();
       clearPipeline();
       clearActiveChannels();
+      clearAvatarCache();
+      stopBridgePolling();
       debug.i("CHAT", "cleanup");
     },
   },
 });
-
-function setActiveChannelIdToggle(player: Player): void {
-  const cur = getActiveChannelId(player.id);
-  Msg.info(`当前频道: §e${cur}`, player);
-}

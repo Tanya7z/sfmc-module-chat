@@ -6,42 +6,28 @@
   "configKey": "chat",
   "enabledByDefault": true,
   "canDisable": true,
-  "requires": ["economy"],
+  "requires": [],
   "permissions": [
     "config:read:chat",
     "db:read:sfmc_chat_channels",
     "db:write:sfmc_chat_channels",
     "db:read:sfmc_chat_messages",
     "db:write:sfmc_chat_messages",
-    "db:read:sfmc_chat_redpackets",
-    "db:write:sfmc_chat_redpackets",
     "db:read:sfmc_chat_avatars",
     "db:write:sfmc_chat_avatars",
     "db:read:sfmc_players",
     "db:write:sfmc_players",
     "service:chat.openChannelPanel",
-    "service:chat.openRedPacketPanel",
     "service:chat.openPrivatePanel",
     "service:chat.send",
     "service:chat.broadcast",
     "service:chat.registerInterceptor",
-    "service:chat.onMessage",
-    "service:economy.account.credit",
-    "service:economy.account.debit"
+    "service:chat.onMessage"
   ],
   "services": {
     "provides": [
       {
         "name": "chat.openChannelPanel",
-        "input": {
-          "type": "object"
-        },
-        "output": {
-          "type": "object"
-        }
-      },
-      {
-        "name": "chat.openRedPacketPanel",
         "input": {
           "type": "object"
         },
@@ -95,14 +81,7 @@
         }
       }
     ],
-    "requires": [
-      {
-        "name": "economy.account.credit"
-      },
-      {
-        "name": "economy.account.debit"
-      }
-    ]
+    "requires": []
   },
   "notes": "独占 beforeEvents.chatSend；interceptor/onMessage；broadcast/send；原生 chat/tell 命令。"
 }
