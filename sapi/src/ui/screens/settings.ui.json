@@ -1,0 +1,175 @@
+{
+  "$schema": "https://cdn.jsdelivr.net/gh/DogeLakeDev/ScriptsForMinecraftServer@latest/modules/sdk/%40sfmc-sdk/schemas/ui-screen.v1.schema.json",
+  "formatVersion": 1,
+  "id": "chat.settings",
+  "name": "频道设置",
+  "presentation": "form",
+  "title": "频道设置",
+  "params": { "channelId": { "type": "string", "required": true } },
+  "state": {
+    "name": { "type": "string", "default": "", "maxLength": 32 },
+    "prefix": { "type": "string", "default": "", "maxLength": 12 },
+    "slowMode": { "type": "string", "default": "" }
+  },
+  "load": {
+    "channel": {
+      "service": "chat.ui.channel",
+      "input": {
+        "playerId": "{{player.id}}",
+        "channelId": "{{params.channelId}}"
+      }
+    }
+  },
+  "body": [
+    {
+      "id": "summary",
+      "type": "info",
+      "items": [
+        "{{data.channel.prefix}} - {{data.channel.name}}",
+        "类型：{{data.channel.type}}",
+        "慢速模式：{{data.channel.slowMode}} 秒",
+        "公告板：{{data.channel.broadcastText}}",
+        "允许发言：{{data.channel.allowChatText}}"
+      ]
+    },
+    {
+      "id": "name",
+      "type": "textField",
+      "label": "新频道名称",
+      "bind": "state.name",
+      "description": "留空保持当前名称"
+    },
+    {
+      "id": "prefix",
+      "type": "textField",
+      "label": "新显示前缀",
+      "bind": "state.prefix",
+      "description": "留空保持当前前缀"
+    },
+    {
+      "id": "slow-mode",
+      "type": "textField",
+      "label": "慢速模式秒数",
+      "bind": "state.slowMode",
+      "description": "留空保持当前值，输入 0 可关闭"
+    },
+    {
+      "id": "save",
+      "type": "button",
+      "label": "保存修改",
+      "tone": "primary",
+      "trigger": { "type": "action", "action": "save" }
+    },
+    {
+      "id": "broadcast",
+      "type": "button",
+      "label": "切换公告板模式",
+      "trigger": { "type": "action", "action": "toggleBroadcast" }
+    },
+    {
+      "id": "allow-chat",
+      "type": "button",
+      "label": "切换允许发言",
+      "trigger": { "type": "action", "action": "toggleAllowChat" }
+    },
+    {
+      "id": "delete",
+      "type": "button",
+      "label": "删除频道",
+      "tone": "danger",
+      "visibleWhen": { "ref": "data.channel.canDelete" },
+      "trigger": { "type": "action", "action": "delete" }
+    },
+    {
+      "id": "back",
+      "type": "button",
+      "label": "返回",
+      "trigger": { "type": "back" }
+    }
+  ],
+  "actions": {
+    "save": {
+      "call": {
+        "service": "chat.ui.saveChannel",
+        "input": {
+          "playerId": "{{player.id}}",
+          "channelId": "{{params.channelId}}",
+          "name": "{{state.name}}",
+          "prefix": "{{state.prefix}}",
+          "slowMode": "{{state.slowMode}}"
+        }
+      },
+      "onSuccess": [
+        { "effect": "message", "text": "频道设置已保存", "tone": "success" },
+        { "effect": "refresh" }
+      ],
+      "onError": [
+        {
+          "effect": "message",
+          "text": "保存失败：{{result.message}}",
+          "tone": "danger"
+        }
+      ]
+    },
+    "toggleBroadcast": {
+      "call": {
+        "service": "chat.ui.toggleBroadcast",
+        "input": {
+          "playerId": "{{player.id}}",
+          "channelId": "{{params.channelId}}"
+        }
+      },
+      "onSuccess": [{ "effect": "refresh" }],
+      "onError": [
+        {
+          "effect": "message",
+          "text": "更新失败：{{result.message}}",
+          "tone": "danger"
+        }
+      ]
+    },
+    "toggleAllowChat": {
+      "call": {
+        "service": "chat.ui.toggleAllowChat",
+        "input": {
+          "playerId": "{{player.id}}",
+          "channelId": "{{params.channelId}}"
+        }
+      },
+      "onSuccess": [{ "effect": "refresh" }],
+      "onError": [
+        {
+          "effect": "message",
+          "text": "更新失败：{{result.message}}",
+          "tone": "danger"
+        }
+      ]
+    },
+    "delete": {
+      "confirm": {
+        "title": "删除频道",
+        "body": "确认删除频道“{{data.channel.name}}”吗？",
+        "confirmText": "确认删除",
+        "danger": true
+      },
+      "call": {
+        "service": "chat.ui.deleteChannel",
+        "input": {
+          "playerId": "{{player.id}}",
+          "channelId": "{{params.channelId}}"
+        }
+      },
+      "onSuccess": [
+        { "effect": "message", "text": "频道已删除", "tone": "success" },
+        { "effect": "replace", "to": "chat.manager" }
+      ],
+      "onError": [
+        {
+          "effect": "message",
+          "text": "删除失败：{{result.message}}",
+          "tone": "danger"
+        }
+      ]
+    }
+  }
+}

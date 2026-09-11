@@ -1,0 +1,83 @@
+{
+  "$schema": "https://cdn.jsdelivr.net/gh/DogeLakeDev/ScriptsForMinecraftServer@latest/modules/sdk/%40sfmc-sdk/schemas/ui-screen.v1.schema.json",
+  "formatVersion": 1,
+  "id": "chat.private",
+  "name": "私聊频道",
+  "presentation": "reactive",
+  "title": "私聊频道",
+  "load": {
+    "model": {
+      "service": "chat.ui.privateChannels",
+      "input": { "playerId": "{{player.id}}" }
+    }
+  },
+  "body": [
+    {
+      "id": "compose",
+      "type": "button",
+      "label": "新消息",
+      "trigger": { "type": "navigate", "to": "chat.compose" }
+    },
+    {
+      "id": "channels",
+      "type": "each",
+      "source": "data.model.items",
+      "as": "channel",
+      "template": [
+        {
+          "id": "activate",
+          "type": "button",
+          "label": "{{channel.name}}",
+          "trigger": {
+            "type": "action",
+            "action": "activate",
+            "input": { "channelId": "{{channel.id}}" }
+          }
+        }
+      ],
+      "empty": [
+        {
+          "id": "empty",
+          "type": "text",
+          "text": "暂无私聊频道",
+          "tone": "muted"
+        }
+      ]
+    },
+    {
+      "id": "back",
+      "type": "button",
+      "label": "返回聊天频道",
+      "trigger": { "type": "navigate", "to": "chat.channels" }
+    },
+    {
+      "id": "close",
+      "type": "button",
+      "label": "关闭",
+      "trigger": { "type": "close" }
+    }
+  ],
+  "actions": {
+    "activate": {
+      "call": {
+        "service": "chat.ui.activatePrivate",
+        "input": { "playerId": "{{player.id}}" }
+      },
+      "onSuccess": [
+        {
+          "effect": "message",
+          "text": "已切换到 {{result.name}}",
+          "tone": "success"
+        },
+        { "effect": "close" }
+      ],
+      "onError": [
+        {
+          "effect": "message",
+          "text": "私聊频道切换失败：{{result.message}}",
+          "tone": "danger"
+        }
+      ]
+    }
+  }
+}

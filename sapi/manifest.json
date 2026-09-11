@@ -6,7 +6,7 @@
   "configKey": "chat",
   "enabledByDefault": true,
   "canDisable": true,
-  "requires": [],
+  "requires": ["gui"],
   "permissions": [
     "config:read:chat",
     "db:read:sfmc_chat_channels",
@@ -22,7 +22,24 @@
     "service:chat.send",
     "service:chat.broadcast",
     "service:chat.registerInterceptor",
-    "service:chat.onMessage"
+    "service:chat.onMessage",
+    "service:chat.ui.channels",
+    "service:chat.ui.selectChannel",
+    "service:chat.ui.manager",
+    "service:chat.ui.channel",
+    "service:chat.ui.saveChannel",
+    "service:chat.ui.toggleBroadcast",
+    "service:chat.ui.toggleAllowChat",
+    "service:chat.ui.deleteChannel",
+    "service:chat.ui.createChannel",
+    "service:chat.ui.privateChannels",
+    "service:chat.ui.activatePrivate",
+    "service:chat.ui.compose",
+    "service:chat.ui.onlinePlayers",
+    "service:chat.ui.invite",
+    "service:gui.registerFeature",
+    "service:gui.unregisterFeature",
+    "service:gui.openScreen"
   ],
   "services": {
     "provides": [
@@ -79,9 +96,83 @@
         "output": {
           "type": "object"
         }
+      },
+      {
+        "name": "chat.ui.channels",
+        "input": { "type": "object" },
+        "output": { "type": "object" }
+      },
+      {
+        "name": "chat.ui.selectChannel",
+        "input": { "type": "object" },
+        "output": { "type": "object" }
+      },
+      {
+        "name": "chat.ui.manager",
+        "input": { "type": "object" },
+        "output": { "type": "object" }
+      },
+      {
+        "name": "chat.ui.channel",
+        "input": { "type": "object" },
+        "output": { "type": "object" }
+      },
+      {
+        "name": "chat.ui.saveChannel",
+        "input": { "type": "object" },
+        "output": { "type": "object" }
+      },
+      {
+        "name": "chat.ui.toggleBroadcast",
+        "input": { "type": "object" },
+        "output": { "type": "object" }
+      },
+      {
+        "name": "chat.ui.toggleAllowChat",
+        "input": { "type": "object" },
+        "output": { "type": "object" }
+      },
+      {
+        "name": "chat.ui.deleteChannel",
+        "input": { "type": "object" },
+        "output": { "type": "object" }
+      },
+      {
+        "name": "chat.ui.createChannel",
+        "input": { "type": "object" },
+        "output": { "type": "object" }
+      },
+      {
+        "name": "chat.ui.privateChannels",
+        "input": { "type": "object" },
+        "output": { "type": "object" }
+      },
+      {
+        "name": "chat.ui.activatePrivate",
+        "input": { "type": "object" },
+        "output": { "type": "object" }
+      },
+      {
+        "name": "chat.ui.compose",
+        "input": { "type": "object" },
+        "output": { "type": "object" }
+      },
+      {
+        "name": "chat.ui.onlinePlayers",
+        "input": { "type": "object" },
+        "output": { "type": "object" }
+      },
+      {
+        "name": "chat.ui.invite",
+        "input": { "type": "object" },
+        "output": { "type": "object" }
       }
     ],
-    "requires": []
+    "requires": [
+      { "name": "gui.registerFeature" },
+      { "name": "gui.unregisterFeature" },
+      { "name": "gui.openScreen" }
+    ]
   },
-  "notes": "独占 beforeEvents.chatSend；interceptor/onMessage；broadcast/send；原生 chat/tell 命令。"
+  "notes": "独占 beforeEvents.chatSend；interceptor/onMessage；broadcast/send；频道、私聊与邀请界面由声明式 JSON 定义。"
 }

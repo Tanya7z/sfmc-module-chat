@@ -1,0 +1,82 @@
+{
+  "$schema": "https://cdn.jsdelivr.net/gh/DogeLakeDev/ScriptsForMinecraftServer@latest/modules/sdk/%40sfmc-sdk/schemas/ui-screen.v1.schema.json",
+  "formatVersion": 1,
+  "id": "chat.manager",
+  "name": "频道管理",
+  "presentation": "reactive",
+  "title": "频道管理",
+  "load": {
+    "model": {
+      "service": "chat.ui.manager",
+      "input": { "playerId": "{{player.id}}" }
+    }
+  },
+  "body": [
+    {
+      "id": "summary",
+      "type": "info",
+      "items": ["共有 {{data.model.count}} 个频道"]
+    },
+    {
+      "id": "create",
+      "type": "button",
+      "label": "创建频道",
+      "trigger": { "type": "navigate", "to": "chat.create" }
+    },
+    {
+      "id": "channels",
+      "type": "each",
+      "source": "data.model.items",
+      "as": "channel",
+      "template": [
+        {
+          "id": "manage-channel",
+          "type": "button",
+          "label": "{{channel.label}}",
+          "visibleWhen": { "ref": "channel.canManage" },
+          "trigger": {
+            "type": "navigate",
+            "to": "chat.settings",
+            "params": { "channelId": "{{channel.id}}" }
+          }
+        },
+        {
+          "id": "activate-channel",
+          "type": "button",
+          "label": "{{channel.label}}",
+          "visibleWhen": {
+            "op": "not",
+            "args": [{ "ref": "channel.canManage" }]
+          },
+          "trigger": {
+            "type": "action",
+            "action": "activate",
+            "input": { "channelId": "{{channel.id}}" }
+          }
+        }
+      ]
+    },
+    {
+      "id": "back",
+      "type": "button",
+      "label": "返回聊天频道",
+      "trigger": { "type": "back" }
+    }
+  ],
+  "actions": {
+    "activate": {
+      "call": {
+        "service": "chat.ui.selectChannel",
+        "input": { "playerId": "{{player.id}}" }
+      },
+      "onSuccess": [{ "effect": "replace", "to": "chat.channels" }],
+      "onError": [
+        {
+          "effect": "message",
+          "text": "频道切换失败：{{result.message}}",
+          "tone": "danger"
+        }
+      ]
+    }
+  }
+}

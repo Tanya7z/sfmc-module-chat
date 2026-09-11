@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
+import { fileURLToPath } from "node:url";
 import { decorateMessageContent, formatChatLine } from "../sapi/src/format.ts";
 import {
   clearPipeline,
@@ -86,5 +88,69 @@ describe("chat pipeline", () => {
     assert.equal(interceptorCount(), 1);
     assert.equal(observerCount(), 1);
     clearPipeline();
+  });
+});
+
+describe("chat 声明式 UI", () => {
+  it("manifest、feature 与页面文件保持一致", () => {
+    const manifest = JSON.parse(
+      readFileSync(
+        fileURLToPath(new URL("../sapi/manifest.json", import.meta.url)),
+        "utf8",
+      ),
+    ) as {
+      requires: string[];
+      services: {
+        provides: Array<{ name: string }>;
+        requires: Array<{ name: string }>;
+      };
+    };
+    const feature = JSON.parse(
+      readFileSync(
+        fileURLToPath(
+          new URL("../sapi/src/ui/feature.ui.json", import.meta.url),
+        ),
+        "utf8",
+      ),
+    ) as { moduleId: string; screens: Array<{ id: string; file: string }> };
+
+    assert.equal(feature.moduleId, "chat");
+    assert.ok(manifest.requires.includes("gui"));
+    assert.deepEqual(
+      manifest.services.requires.map((item) => item.name).sort(),
+      ["gui.openScreen", "gui.registerFeature", "gui.unregisterFeature"],
+    );
+    const provided = new Set(
+      manifest.services.provides.map((item) => item.name),
+    );
+    for (const name of [
+      "chat.ui.channels",
+      "chat.ui.selectChannel",
+      "chat.ui.manager",
+      "chat.ui.channel",
+      "chat.ui.saveChannel",
+      "chat.ui.toggleBroadcast",
+      "chat.ui.toggleAllowChat",
+      "chat.ui.deleteChannel",
+      "chat.ui.createChannel",
+      "chat.ui.privateChannels",
+      "chat.ui.activatePrivate",
+      "chat.ui.compose",
+      "chat.ui.onlinePlayers",
+      "chat.ui.invite",
+    ]) {
+      assert.ok(provided.has(name), `manifest 缺少 ${name}`);
+    }
+    for (const screen of feature.screens) {
+      const document = JSON.parse(
+        readFileSync(
+          fileURLToPath(
+            new URL(`../sapi/src/ui/${screen.file}`, import.meta.url),
+          ),
+          "utf8",
+        ),
+      ) as { id: string };
+      assert.equal(document.id, screen.id);
+    }
   });
 });

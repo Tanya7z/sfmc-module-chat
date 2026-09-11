@@ -1,0 +1,70 @@
+{
+  "$schema": "https://cdn.jsdelivr.net/gh/DogeLakeDev/ScriptsForMinecraftServer@latest/modules/sdk/%40sfmc-sdk/schemas/ui-screen.v1.schema.json",
+  "formatVersion": 1,
+  "id": "chat.invite",
+  "name": "传送邀请",
+  "presentation": "reactive",
+  "title": "传送邀请",
+  "load": {
+    "model": {
+      "service": "chat.ui.onlinePlayers",
+      "input": { "playerId": "{{player.id}}" }
+    }
+  },
+  "body": [
+    {
+      "id": "players",
+      "type": "each",
+      "source": "data.model.items",
+      "as": "target",
+      "template": [
+        {
+          "id": "invite-player",
+          "type": "button",
+          "label": "{{target.name}}",
+          "trigger": {
+            "type": "action",
+            "action": "invite",
+            "input": { "targetId": "{{target.id}}" }
+          }
+        }
+      ],
+      "empty": [
+        {
+          "id": "empty",
+          "type": "text",
+          "text": "当前没有其他在线玩家",
+          "tone": "muted"
+        }
+      ]
+    },
+    {
+      "id": "close",
+      "type": "button",
+      "label": "关闭",
+      "trigger": { "type": "close" }
+    }
+  ],
+  "actions": {
+    "invite": {
+      "call": {
+        "service": "chat.ui.invite",
+        "input": { "playerId": "{{player.id}}" }
+      },
+      "onSuccess": [
+        {
+          "effect": "message",
+          "text": "已向 {{result.targetName}} 发送传送邀请",
+          "tone": "success"
+        }
+      ],
+      "onError": [
+        {
+          "effect": "message",
+          "text": "发送失败：{{result.message}}",
+          "tone": "danger"
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,68 @@
+{
+  "$schema": "https://cdn.jsdelivr.net/gh/DogeLakeDev/ScriptsForMinecraftServer@latest/modules/sdk/%40sfmc-sdk/schemas/ui-screen.v1.schema.json",
+  "formatVersion": 1,
+  "id": "chat.create",
+  "name": "创建频道",
+  "presentation": "form",
+  "title": "创建频道",
+  "state": {
+    "name": { "type": "string", "default": "", "maxLength": 32 },
+    "prefix": { "type": "string", "default": "", "maxLength": 12 }
+  },
+  "body": [
+    {
+      "id": "name",
+      "type": "textField",
+      "label": "频道名称",
+      "bind": "state.name",
+      "description": "输入频道名称"
+    },
+    {
+      "id": "prefix",
+      "type": "textField",
+      "label": "显示前缀",
+      "bind": "state.prefix",
+      "description": "建议使用简短前缀"
+    },
+    {
+      "id": "submit",
+      "type": "button",
+      "label": "创建",
+      "tone": "primary",
+      "trigger": { "type": "action", "action": "create" }
+    },
+    {
+      "id": "back",
+      "type": "button",
+      "label": "返回",
+      "trigger": { "type": "back" }
+    }
+  ],
+  "actions": {
+    "create": {
+      "call": {
+        "service": "chat.ui.createChannel",
+        "input": {
+          "playerId": "{{player.id}}",
+          "name": "{{state.name}}",
+          "prefix": "{{state.prefix}}"
+        }
+      },
+      "onSuccess": [
+        {
+          "effect": "message",
+          "text": "频道“{{result.name}}”已创建并切换",
+          "tone": "success"
+        },
+        { "effect": "replace", "to": "chat.channels" }
+      ],
+      "onError": [
+        {
+          "effect": "message",
+          "text": "创建失败：{{result.message}}",
+          "tone": "danger"
+        }
+      ]
+    }
+  }
+}

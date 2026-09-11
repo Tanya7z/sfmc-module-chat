@@ -1,0 +1,90 @@
+{
+  "$schema": "https://cdn.jsdelivr.net/gh/DogeLakeDev/ScriptsForMinecraftServer@latest/modules/sdk/%40sfmc-sdk/schemas/ui-screen.v1.schema.json",
+  "formatVersion": 1,
+  "id": "chat.channels",
+  "name": "聊天频道",
+  "presentation": "reactive",
+  "title": "聊天频道",
+  "load": {
+    "model": {
+      "service": "chat.ui.channels",
+      "input": { "playerId": "{{player.id}}" }
+    }
+  },
+  "body": [
+    {
+      "id": "summary",
+      "type": "info",
+      "items": [
+        "当前发送频道：{{data.model.activeLabel}}",
+        "点击频道可订阅、切换或取消订阅"
+      ]
+    },
+    {
+      "id": "manager",
+      "type": "button",
+      "label": "频道管理",
+      "trigger": { "type": "navigate", "to": "chat.manager" }
+    },
+    {
+      "id": "private",
+      "type": "button",
+      "label": "私聊频道",
+      "trigger": { "type": "navigate", "to": "chat.private" }
+    },
+    {
+      "id": "channels",
+      "type": "each",
+      "source": "data.model.items",
+      "as": "channel",
+      "template": [
+        {
+          "id": "select-channel",
+          "type": "button",
+          "label": "{{channel.label}}",
+          "trigger": {
+            "type": "action",
+            "action": "select",
+            "input": { "channelId": "{{channel.id}}" }
+          }
+        }
+      ],
+      "empty": [
+        {
+          "id": "empty",
+          "type": "text",
+          "text": "暂无可用频道",
+          "tone": "muted"
+        }
+      ]
+    },
+    {
+      "id": "refresh",
+      "type": "button",
+      "label": "刷新",
+      "trigger": { "type": "refresh" }
+    },
+    {
+      "id": "close",
+      "type": "button",
+      "label": "关闭",
+      "trigger": { "type": "close" }
+    }
+  ],
+  "actions": {
+    "select": {
+      "call": {
+        "service": "chat.ui.selectChannel",
+        "input": { "playerId": "{{player.id}}" }
+      },
+      "onSuccess": [{ "effect": "refresh" }],
+      "onError": [
+        {
+          "effect": "message",
+          "text": "频道切换失败：{{result.message}}",
+          "tone": "danger"
+        }
+      ]
+    }
+  }
+}

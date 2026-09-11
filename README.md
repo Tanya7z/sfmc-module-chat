@@ -8,6 +8,7 @@ Wave B official SFMC module: **chat**（聊天管道中枢）。
 - 频道订阅、快速切换、慢速模式、历史消息与玩家偏好持久化
 - 定位、传送邀请和 QQ 双向桥接
 - 归档版 PB / BC / 私信文字模板及五分钟分段时间戳
+- `/c:chat`、`/c:tell` 与 `/c:tp` 打开的页面均由 `sapi/src/ui/*.ui.json` 声明，业务操作通过纯数据 service 执行
 
 ## 配置
 

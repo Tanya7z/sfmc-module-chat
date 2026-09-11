@@ -1,0 +1,66 @@
+{
+  "$schema": "https://cdn.jsdelivr.net/gh/DogeLakeDev/ScriptsForMinecraftServer@latest/modules/sdk/%40sfmc-sdk/schemas/ui-screen.v1.schema.json",
+  "formatVersion": 1,
+  "id": "chat.compose",
+  "name": "发送私聊",
+  "presentation": "form",
+  "title": "发送私聊",
+  "state": {
+    "targetName": { "type": "string", "default": "" },
+    "content": { "type": "string", "default": "" }
+  },
+  "body": [
+    {
+      "id": "target",
+      "type": "textField",
+      "label": "目标玩家",
+      "bind": "state.targetName"
+    },
+    {
+      "id": "content",
+      "type": "textField",
+      "label": "消息内容",
+      "bind": "state.content"
+    },
+    {
+      "id": "send",
+      "type": "button",
+      "label": "发送",
+      "tone": "primary",
+      "trigger": { "type": "action", "action": "send" }
+    },
+    {
+      "id": "back",
+      "type": "button",
+      "label": "返回",
+      "trigger": { "type": "back" }
+    }
+  ],
+  "actions": {
+    "send": {
+      "call": {
+        "service": "chat.ui.compose",
+        "input": {
+          "playerId": "{{player.id}}",
+          "targetName": "{{state.targetName}}",
+          "content": "{{state.content}}"
+        }
+      },
+      "onSuccess": [
+        {
+          "effect": "message",
+          "text": "已向 {{result.targetName}} 发送私聊",
+          "tone": "success"
+        },
+        { "effect": "replace", "to": "chat.private" }
+      ],
+      "onError": [
+        {
+          "effect": "message",
+          "text": "发送失败：{{result.message}}",
+          "tone": "danger"
+        }
+      ]
+    }
+  }
+}

@@ -39,17 +39,22 @@ import {
   runInterceptors,
 } from "./pipeline.js";
 import {
-  openChannelPanel,
-  openPrivatePanel,
-  cycleActiveChannel,
-  sendTeleportInvite,
-  shareLocation,
-} from "./panels.js";
-import {
   clearAvatarCache,
   setAvatarGlyphsEnabled,
   warmAvatarCache,
 } from "./avatar.js";
+import {
+  openChannelPanel,
+  openPrivatePanel,
+  registerChatUi,
+  sendTeleportInvite,
+  unregisterChatUi,
+} from "./ui.js";
+import {
+  chatUiServices,
+  cycleActiveChannel,
+  shareLocation,
+} from "./ui-services.js";
 
 const MODULE_ID = "chat";
 
@@ -304,23 +309,15 @@ ModuleRegistry.register({
         ),
       );
 
-      // 弱挂载到 gui（若可用）
-      void service
-        .call("gui.registerMenuItem", {
-          id: "chat.channel",
-          title: "聊天频道",
-          order: 20,
-          category: "general",
-          permission: "chat.use",
-          handler: (player: Player) => {
-            void openChannelPanel(player);
-          },
-        } as unknown as Record<string, unknown>)
-        .catch(() => undefined);
+      for (const [name, handler] of Object.entries(chatUiServices)) {
+        unprovide.push(service.provide(name, handler));
+      }
+      await registerChatUi();
 
       debug.i("CHAT", "init pipeline ready");
     },
     cleanup() {
+      void unregisterChatUi().catch(() => undefined);
       for (const off of unprovide.splice(0, unprovide.length)) {
         try {
           off();
