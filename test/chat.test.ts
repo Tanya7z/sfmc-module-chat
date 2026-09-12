@@ -100,6 +100,7 @@ describe("chat 声明式 UI", () => {
       ),
     ) as {
       requires: string[];
+      permissions: string[];
       services: {
         provides: Array<{ name: string }>;
         requires: Array<{ name: string }>;
@@ -115,11 +116,9 @@ describe("chat 声明式 UI", () => {
     ) as { moduleId: string; screens: Array<{ id: string; file: string }> };
 
     assert.equal(feature.moduleId, "chat");
-    assert.ok(manifest.requires.includes("gui"));
-    assert.deepEqual(
-      manifest.services.requires.map((item) => item.name).sort(),
-      ["gui.openScreen", "gui.registerFeature", "gui.unregisterFeature"],
-    );
+    assert.deepEqual(manifest.requires, []);
+    assert.deepEqual(manifest.services.requires, []);
+    assert.ok(!manifest.permissions.some((item) => item.startsWith("service:gui.")));
     const provided = new Set(
       manifest.services.provides.map((item) => item.name),
     );

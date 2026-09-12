@@ -312,12 +312,12 @@ ModuleRegistry.register({
       for (const [name, handler] of Object.entries(chatUiServices)) {
         unprovide.push(service.provide(name, handler));
       }
-      await registerChatUi();
+      registerChatUi();
 
       debug.i("CHAT", "init pipeline ready");
     },
     cleanup() {
-      void unregisterChatUi().catch(() => undefined);
+      unregisterChatUi();
       for (const off of unprovide.splice(0, unprovide.length)) {
         try {
           off();

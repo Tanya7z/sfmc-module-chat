@@ -6,7 +6,7 @@
   "configKey": "chat",
   "enabledByDefault": true,
   "canDisable": true,
-  "requires": ["gui"],
+  "requires": [],
   "permissions": [
     "config:read:chat",
     "db:read:sfmc_chat_channels",
@@ -36,10 +36,7 @@
     "service:chat.ui.activatePrivate",
     "service:chat.ui.compose",
     "service:chat.ui.onlinePlayers",
-    "service:chat.ui.invite",
-    "service:gui.registerFeature",
-    "service:gui.unregisterFeature",
-    "service:gui.openScreen"
+    "service:chat.ui.invite"
   ],
   "services": {
     "provides": [
@@ -168,11 +165,7 @@
         "output": { "type": "object" }
       }
     ],
-    "requires": [
-      { "name": "gui.registerFeature" },
-      { "name": "gui.unregisterFeature" },
-      { "name": "gui.openScreen" }
-    ]
+    "requires": []
   },
   "notes": "独占 beforeEvents.chatSend；interceptor/onMessage；broadcast/send；频道、私聊与邀请界面由声明式 JSON 定义。"
 }

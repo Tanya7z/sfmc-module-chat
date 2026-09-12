@@ -1,7 +1,7 @@
 /** 聊天声明式页面的注册与打开入口。 */
 
 import type { Player } from "@minecraft/server";
-import { service } from "@sfmc-bds/sdk/sapi/service";
+import { ui } from "@sfmc-bds/sdk/sapi/ui";
 import featureUi from "./ui/feature.ui.json" with { type: "json" };
 import channelsUi from "./ui/screens/channels.ui.json" with { type: "json" };
 import composeUi from "./ui/screens/compose.ui.json" with { type: "json" };
@@ -13,37 +13,35 @@ import settingsUi from "./ui/screens/settings.ui.json" with { type: "json" };
 import { preparePrivateChannel } from "./ui-services.js";
 
 const MODULE_ID = "chat";
+let unregisterUi: (() => void) | undefined;
 
-export async function registerChatUi(): Promise<void> {
-  const result = await service.call<{ ok?: boolean; error?: string }>(
-    "gui.registerFeature",
-    {
-      feature: featureUi,
-      screens: {
-        "screens/channels.ui.json": channelsUi,
-        "screens/manager.ui.json": managerUi,
-        "screens/settings.ui.json": settingsUi,
-        "screens/create.ui.json": createUi,
-        "screens/private.ui.json": privateUi,
-        "screens/compose.ui.json": composeUi,
-        "screens/invite.ui.json": inviteUi,
-      },
+export function registerChatUi(): void {
+  unregisterChatUi();
+  unregisterUi = ui.registerFeature({
+    feature: featureUi,
+    screens: {
+      "screens/channels.ui.json": channelsUi,
+      "screens/manager.ui.json": managerUi,
+      "screens/settings.ui.json": settingsUi,
+      "screens/create.ui.json": createUi,
+      "screens/private.ui.json": privateUi,
+      "screens/compose.ui.json": composeUi,
+      "screens/invite.ui.json": inviteUi,
     },
-  );
-  if (!result?.ok) throw new Error(result?.error || "聊天 UI 注册失败");
+  });
 }
 
-export function unregisterChatUi(): Promise<unknown> {
-  return service.call("gui.unregisterFeature", { moduleId: MODULE_ID });
+export function unregisterChatUi(): void {
+  unregisterUi?.();
+  unregisterUi = undefined;
 }
 
 export function openChatUi(
   player: Player,
   screenId = "chat.channels",
   params: Record<string, unknown> = {},
-): Promise<unknown> {
-  return service.call("gui.openScreen", {
-    playerId: player.id,
+): Promise<void> {
+  return ui.openScreen(player, {
     moduleId: MODULE_ID,
     screenId,
     params,
