@@ -2,21 +2,31 @@
   "$schema": "https://cdn.jsdelivr.net/gh/DogeLakeDev/ScriptsForMinecraftServer@latest/modules/sdk/%40sfmc-sdk/schemas/ui-screen.v1.schema.json",
   "formatVersion": 1,
   "id": "chat.private",
-  "name": "私聊频道",
+  "name": "chat.private",
   "presentation": "reactive",
-  "title": "私聊频道",
+  "title": "私聊",
   "load": {
     "model": {
       "service": "chat.ui.privateChannels",
-      "input": { "playerId": "{{player.id}}" }
+      "input": {
+        "playerId": "{{player.id}}"
+      }
     }
   },
   "body": [
     {
+      "id": "spacer",
+      "type": "spacer",
+      "size": "small"
+    },
+    {
       "id": "compose",
       "type": "button",
-      "label": "新消息",
-      "trigger": { "type": "navigate", "to": "chat.compose" }
+      "label": "发起私聊",
+      "trigger": {
+        "type": "navigate",
+        "to": "chat.compose"
+      }
     },
     {
       "id": "channels",
@@ -31,11 +41,18 @@
           "trigger": {
             "type": "action",
             "action": "activate",
-            "input": { "channelId": "{{channel.id}}" }
+            "input": {
+              "channelId": "{{channel.id}}"
+            }
           }
         }
       ],
       "empty": [
+        {
+          "id": "spacer-2",
+          "type": "spacer",
+          "size": "small"
+        },
         {
           "id": "empty",
           "type": "text",
@@ -45,23 +62,42 @@
       ]
     },
     {
+      "id": "divider",
+      "type": "divider"
+    },
+    {
       "id": "back",
       "type": "button",
-      "label": "返回聊天频道",
-      "trigger": { "type": "navigate", "to": "chat.channels" }
+      "label": "返回",
+      "trigger": {
+        "type": "navigate",
+        "to": "chat.channels"
+      }
+    },
+    {
+      "id": "button",
+      "type": "button",
+      "label": "刷新",
+      "trigger": {
+        "type": "refresh"
+      }
     },
     {
       "id": "close",
       "type": "button",
       "label": "关闭",
-      "trigger": { "type": "close" }
+      "trigger": {
+        "type": "close"
+      }
     }
   ],
   "actions": {
     "activate": {
       "call": {
         "service": "chat.ui.activatePrivate",
-        "input": { "playerId": "{{player.id}}" }
+        "input": {
+          "playerId": "{{player.id}}"
+        }
       },
       "onSuccess": [
         {
@@ -69,7 +105,9 @@
           "text": "已切换到 {{result.name}}",
           "tone": "success"
         },
-        { "effect": "close" }
+        {
+          "effect": "close"
+        }
       ],
       "onError": [
         {

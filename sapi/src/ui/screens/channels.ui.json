@@ -2,35 +2,51 @@
   "$schema": "https://cdn.jsdelivr.net/gh/DogeLakeDev/ScriptsForMinecraftServer@latest/modules/sdk/%40sfmc-sdk/schemas/ui-screen.v1.schema.json",
   "formatVersion": 1,
   "id": "chat.channels",
-  "name": "聊天频道",
+  "name": "chat.channels",
   "presentation": "reactive",
   "title": "聊天频道",
   "load": {
     "model": {
       "service": "chat.ui.channels",
-      "input": { "playerId": "{{player.id}}" }
+      "input": {
+        "playerId": "{{player.id}}"
+      }
     }
   },
   "body": [
     {
-      "id": "summary",
-      "type": "info",
-      "items": [
-        "当前发送频道：{{data.model.activeLabel}}",
-        "点击频道可订阅、切换或取消订阅"
-      ]
+      "id": "spacer",
+      "type": "spacer",
+      "size": "small"
+    },
+    {
+      "id": "private",
+      "type": "button",
+      "label": "私聊",
+      "trigger": {
+        "type": "navigate",
+        "to": "chat.private"
+      },
+      "tooltip": "说悄悄话...",
+      "description": "说悄悄话..."
     },
     {
       "id": "manager",
       "type": "button",
       "label": "频道管理",
-      "trigger": { "type": "navigate", "to": "chat.manager" }
+      "trigger": {
+        "type": "navigate",
+        "to": "chat.manager"
+      }
     },
     {
-      "id": "private",
-      "type": "button",
-      "label": "私聊频道",
-      "trigger": { "type": "navigate", "to": "chat.private" }
+      "id": "divider-2",
+      "type": "divider"
+    },
+    {
+      "id": "spacer-2",
+      "type": "spacer",
+      "size": "small"
     },
     {
       "id": "channels",
@@ -39,14 +55,53 @@
       "as": "channel",
       "template": [
         {
-          "id": "select-channel",
-          "type": "button",
-          "label": "{{channel.label}}",
+          "id": "channel-name",
+          "type": "text",
+          "text": "{{channel.title}}"
+        },
+        {
+          "id": "spacer-4",
+          "type": "spacer",
+          "size": "small"
+        },
+        {
+          "id": "channel-status",
+          "type": "text",
+          "text": "{{channel.status}}",
+          "tone": "muted"
+        },
+        {
+          "id": "spacer-5",
+          "type": "spacer",
+          "size": "small"
+        },
+        {
+          "id": "subscribe",
+          "type": "toggle",
+          "label": "订阅",
+          "bind": "channel.subscribed",
+          "tooltip": "是否接收该频道消息",
+          "disabledWhen": {
+            "op": "not",
+            "args": [
+              {
+                "ref": "channel.canUnsubscribe"
+              }
+            ]
+          },
           "trigger": {
             "type": "action",
-            "action": "select",
-            "input": { "channelId": "{{channel.id}}" }
+            "action": "setSubscribed",
+            "input": {
+              "channelId": "{{channel.id}}",
+              "subscribed": "{{channel.subscribed}}"
+            }
           }
+        },
+        {
+          "id": "spacer-3",
+          "type": "spacer",
+          "size": "medium"
         }
       ],
       "empty": [
@@ -59,30 +114,47 @@
       ]
     },
     {
+      "id": "divider",
+      "type": "divider"
+    },
+    {
       "id": "refresh",
       "type": "button",
       "label": "刷新",
-      "trigger": { "type": "refresh" }
+      "trigger": {
+        "type": "refresh"
+      }
     },
     {
       "id": "close",
       "type": "button",
       "label": "关闭",
-      "trigger": { "type": "close" }
+      "trigger": {
+        "type": "close"
+      }
     }
   ],
   "actions": {
-    "select": {
+    "setSubscribed": {
       "call": {
-        "service": "chat.ui.selectChannel",
-        "input": { "playerId": "{{player.id}}" }
+        "service": "chat.ui.setSubscribed",
+        "input": {
+          "playerId": "{{player.id}}"
+        }
       },
-      "onSuccess": [{ "effect": "refresh" }],
+      "onSuccess": [
+        {
+          "effect": "refresh"
+        }
+      ],
       "onError": [
         {
           "effect": "message",
-          "text": "频道切换失败：{{result.message}}",
+          "text": "订阅更新失败：{{result.message}}",
           "tone": "danger"
+        },
+        {
+          "effect": "refresh"
         }
       ]
     }

@@ -2,7 +2,7 @@
   "$schema": "https://cdn.jsdelivr.net/gh/DogeLakeDev/ScriptsForMinecraftServer@latest/modules/sdk/%40sfmc-sdk/schemas/ui-feature.v1.schema.json",
   "formatVersion": 1,
   "moduleId": "chat",
-  "name": "聊天频道",
+  "name": "频道",
   "entries": [
     {
       "id": "chat.channels",
@@ -16,12 +16,33 @@
     }
   ],
   "screens": [
-    { "id": "chat.channels", "file": "screens/channels.ui.json" },
-    { "id": "chat.manager", "file": "screens/manager.ui.json" },
-    { "id": "chat.settings", "file": "screens/settings.ui.json" },
-    { "id": "chat.create", "file": "screens/create.ui.json" },
-    { "id": "chat.private", "file": "screens/private.ui.json" },
-    { "id": "chat.compose", "file": "screens/compose.ui.json" },
-    { "id": "chat.invite", "file": "screens/invite.ui.json" }
+    {
+      "id": "chat.channels",
+      "file": "screens/channels.ui.json"
+    },
+    {
+      "id": "chat.manager",
+      "file": "screens/manager.ui.json"
+    },
+    {
+      "id": "chat.settings",
+      "file": "screens/settings.ui.json"
+    },
+    {
+      "id": "chat.create",
+      "file": "screens/create.ui.json"
+    },
+    {
+      "id": "chat.private",
+      "file": "screens/private.ui.json"
+    },
+    {
+      "id": "chat.compose",
+      "file": "screens/compose.ui.json"
+    },
+    {
+      "id": "chat.invite",
+      "file": "screens/invite.ui.json"
+    }
   ]
 }

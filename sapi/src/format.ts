@@ -1,6 +1,6 @@
 /** 频道聊天行模板（与归档版保持一致）。 */
 
-export type ChatLineStyle = "channel" | "broadcast" | "private";
+export type ChatLineStyle = "channel" | "private";
 
 export interface FormatChatLineOptions {
   glyph?: string;
@@ -21,9 +21,6 @@ export function formatChatLine(opts: FormatChatLineOptions): string {
   const title = opts.titlePrefix ? `${opts.titlePrefix} ` : "";
 
   if (style === "private") return `${glyph}§d[私信] §f${name}: ${opts.content}`;
-  if (style === "broadcast") {
-    return `${glyph}§a[${prefix}] ${title}${name}: ${opts.content}`;
-  }
   return `${glyph}§b[${prefix}] §f${title}${name}: ${opts.content}`;
 }
 

@@ -24,11 +24,10 @@
     "service:chat.registerInterceptor",
     "service:chat.onMessage",
     "service:chat.ui.channels",
-    "service:chat.ui.selectChannel",
+    "service:chat.ui.setSubscribed",
     "service:chat.ui.manager",
     "service:chat.ui.channel",
     "service:chat.ui.saveChannel",
-    "service:chat.ui.toggleBroadcast",
     "service:chat.ui.toggleAllowChat",
     "service:chat.ui.deleteChannel",
     "service:chat.ui.createChannel",
@@ -100,7 +99,7 @@
         "output": { "type": "object" }
       },
       {
-        "name": "chat.ui.selectChannel",
+        "name": "chat.ui.setSubscribed",
         "input": { "type": "object" },
         "output": { "type": "object" }
       },
@@ -116,11 +115,6 @@
       },
       {
         "name": "chat.ui.saveChannel",
-        "input": { "type": "object" },
-        "output": { "type": "object" }
-      },
-      {
-        "name": "chat.ui.toggleBroadcast",
         "input": { "type": "object" },
         "output": { "type": "object" }
       },

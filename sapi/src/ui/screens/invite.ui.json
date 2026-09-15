@@ -2,16 +2,23 @@
   "$schema": "https://cdn.jsdelivr.net/gh/DogeLakeDev/ScriptsForMinecraftServer@latest/modules/sdk/%40sfmc-sdk/schemas/ui-screen.v1.schema.json",
   "formatVersion": 1,
   "id": "chat.invite",
-  "name": "传送邀请",
+  "name": "chat.invite",
   "presentation": "reactive",
-  "title": "传送邀请",
+  "title": "发起传送邀请",
   "load": {
     "model": {
       "service": "chat.ui.onlinePlayers",
-      "input": { "playerId": "{{player.id}}" }
+      "input": {
+        "playerId": "{{player.id}}"
+      }
     }
   },
   "body": [
+    {
+      "id": "spacer",
+      "type": "spacer",
+      "size": "small"
+    },
     {
       "id": "players",
       "type": "each",
@@ -25,7 +32,9 @@
           "trigger": {
             "type": "action",
             "action": "invite",
-            "input": { "targetId": "{{target.id}}" }
+            "input": {
+              "targetId": "{{target.id}}"
+            }
           }
         }
       ],
@@ -39,17 +48,25 @@
       ]
     },
     {
+      "id": "divider",
+      "type": "divider"
+    },
+    {
       "id": "close",
       "type": "button",
       "label": "关闭",
-      "trigger": { "type": "close" }
+      "trigger": {
+        "type": "close"
+      }
     }
   ],
   "actions": {
     "invite": {
       "call": {
         "service": "chat.ui.invite",
-        "input": { "playerId": "{{player.id}}" }
+        "input": {
+          "playerId": "{{player.id}}"
+        }
       },
       "onSuccess": [
         {

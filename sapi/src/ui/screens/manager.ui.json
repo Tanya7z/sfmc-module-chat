@@ -2,26 +2,43 @@
   "$schema": "https://cdn.jsdelivr.net/gh/DogeLakeDev/ScriptsForMinecraftServer@latest/modules/sdk/%40sfmc-sdk/schemas/ui-screen.v1.schema.json",
   "formatVersion": 1,
   "id": "chat.manager",
-  "name": "频道管理",
+  "name": "chat.manager",
   "presentation": "reactive",
   "title": "频道管理",
   "load": {
     "model": {
       "service": "chat.ui.manager",
-      "input": { "playerId": "{{player.id}}" }
+      "input": {
+        "playerId": "{{player.id}}"
+      }
     }
   },
   "body": [
     {
+      "id": "spacer-3",
+      "type": "spacer",
+      "size": "small"
+    },
+    {
       "id": "summary",
       "type": "info",
-      "items": ["共有 {{data.model.count}} 个频道"]
+      "items": [
+        "共 {{data.model.count}} 个频道"
+      ]
+    },
+    {
+      "id": "spacer-4",
+      "type": "spacer",
+      "size": "small"
     },
     {
       "id": "create",
       "type": "button",
       "label": "创建频道",
-      "trigger": { "type": "navigate", "to": "chat.create" }
+      "trigger": {
+        "type": "navigate",
+        "to": "chat.create"
+      }
     },
     {
       "id": "channels",
@@ -33,50 +50,63 @@
           "id": "manage-channel",
           "type": "button",
           "label": "{{channel.label}}",
-          "visibleWhen": { "ref": "channel.canManage" },
+          "visibleWhen": {
+            "ref": "channel.canManage"
+          },
           "trigger": {
             "type": "navigate",
             "to": "chat.settings",
-            "params": { "channelId": "{{channel.id}}" }
-          }
+            "params": {
+              "channelId": "{{channel.id}}"
+            }
+          },
+          "tooltip": "点击进入该频道的管理界面"
         },
         {
-          "id": "activate-channel",
-          "type": "button",
-          "label": "{{channel.label}}",
-          "visibleWhen": {
+          "id": "when",
+          "type": "when",
+          "condition": {
             "op": "not",
-            "args": [{ "ref": "channel.canManage" }]
+            "args": [
+              {
+                "ref": "channel.canManage"
+              }
+            ]
           },
-          "trigger": {
-            "type": "action",
-            "action": "activate",
-            "input": { "channelId": "{{channel.id}}" }
-          }
+          "content": [
+            {
+              "id": "spacer",
+              "type": "spacer",
+              "size": "small"
+            },
+            {
+              "id": "view-channel",
+              "type": "text",
+              "text": "{{channel.label}}"
+            }
+          ]
         }
       ]
     },
     {
+      "id": "divider",
+      "type": "divider"
+    },
+    {
+      "id": "button",
+      "type": "button",
+      "label": "刷新",
+      "trigger": {
+        "type": "refresh"
+      }
+    },
+    {
       "id": "back",
       "type": "button",
-      "label": "返回聊天频道",
-      "trigger": { "type": "back" }
+      "label": "返回",
+      "trigger": {
+        "type": "back"
+      }
     }
-  ],
-  "actions": {
-    "activate": {
-      "call": {
-        "service": "chat.ui.selectChannel",
-        "input": { "playerId": "{{player.id}}" }
-      },
-      "onSuccess": [{ "effect": "replace", "to": "chat.channels" }],
-      "onError": [
-        {
-          "effect": "message",
-          "text": "频道切换失败：{{result.message}}",
-          "tone": "danger"
-        }
-      ]
-    }
-  }
+  ]
 }

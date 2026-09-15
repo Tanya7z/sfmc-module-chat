@@ -74,7 +74,6 @@ async function defineTables(): Promise<void> {
     owner_id: { type: "TEXT", default: "" },
     allow_chat: { type: "INTEGER", default: 1 },
     slow_mode: { type: "INTEGER", default: 0 },
-    is_broadcast: { type: "INTEGER", default: 0 },
     members_json: { type: "TEXT", default: "[]" },
   });
   await db.defineTable(MESSAGES_TABLE, {

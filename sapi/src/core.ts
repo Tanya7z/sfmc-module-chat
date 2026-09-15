@@ -14,6 +14,8 @@ export const MESSAGES_TABLE = "sfmc_chat_messages";
 export const AVATARS_TABLE = "sfmc_chat_avatars";
 
 const DEFAULT_CHANNEL = "global";
+/** 已废弃的内置公告频道 id；启动时若仍是无主内置项则删除。 */
+const BUILTIN_ANNOUNCE_CHANNEL_ID = "broadcast";
 const activeChannel = new Map<string, string>();
 const subscribedChannels = new Map<string, Set<string>>();
 const slowModeTracker = new Map<string, Map<string, number>>();
@@ -31,9 +33,12 @@ export interface ChannelRecord extends Record<string, unknown> {
   type: "public" | "custom" | "private" | "system";
   prefix: string;
   owner_id: string;
+  /**
+   * 是否允许普通成员发言。0 为全体禁言：仅频道主和 chat.admin 仍可发言。
+   * 使用场景：频道设置「允许发言」开关；投递前校验发言资格。
+   */
   allow_chat: number;
   slow_mode: number;
-  is_broadcast: number;
   members_json?: string;
 }
 
@@ -59,10 +64,8 @@ export function setChatStyle(opts: {
 
 export async function ensureDefaultChannels(): Promise<void> {
   const existing = await getChannel(DEFAULT_CHANNEL);
-  const broadcastChannel = await getChannel("broadcast");
-  if (existing && broadcastChannel) return;
-  await db.tx(async (tx) => {
-    if (!existing) {
+  if (!existing) {
+    await db.tx(async (tx) => {
       await tx.insert(CHANNELS_TABLE, {
         id: DEFAULT_CHANNEL,
         name: "公共频道",
@@ -71,21 +74,26 @@ export async function ensureDefaultChannels(): Promise<void> {
         owner_id: "",
         allow_chat: 1,
         slow_mode: 0,
-        is_broadcast: 0,
       });
+    });
+  }
+  await removeBuiltinAnnouncementChannel();
+}
+
+/**
+ * 删除内置「公告」频道（无主、固定 id=broadcast）。
+ */
+async function removeBuiltinAnnouncementChannel(): Promise<void> {
+  const channel = await getChannel(BUILTIN_ANNOUNCE_CHANNEL_ID);
+  if (!channel || channel.owner_id) return;
+  const messages = await db.query<MessageRecord>(MESSAGES_TABLE, {
+    where: { eq: ["channel_id", BUILTIN_ANNOUNCE_CHANNEL_ID] },
+  });
+  await db.tx(async (tx) => {
+    for (const row of messages) {
+      await tx.delete(MESSAGES_TABLE, row.id);
     }
-    if (!broadcastChannel) {
-      await tx.insert(CHANNELS_TABLE, {
-        id: "broadcast",
-        name: "公告",
-        type: "custom",
-        prefix: "BC",
-        owner_id: "",
-        allow_chat: 1,
-        slow_mode: 0,
-        is_broadcast: 1,
-      });
-    }
+    await tx.delete(CHANNELS_TABLE, BUILTIN_ANNOUNCE_CHANNEL_ID);
   });
 }
 
@@ -130,7 +138,6 @@ export async function createChannel(
     owner_id: owner.id,
     allow_chat: 1,
     slow_mode: 0,
-    is_broadcast: 0,
     members_json: "[]",
   };
   await db.tx(async (tx) => await tx.insert(CHANNELS_TABLE, channel));
@@ -142,10 +149,7 @@ export async function updateChannel(
   actor: Player,
   channelId: string,
   patch: Partial<
-    Pick<
-      ChannelRecord,
-      "name" | "prefix" | "allow_chat" | "slow_mode" | "is_broadcast"
-    >
+    Pick<ChannelRecord, "name" | "prefix" | "allow_chat" | "slow_mode">
   >,
 ): Promise<boolean> {
   const channel = await getChannel(channelId);
@@ -362,14 +366,11 @@ async function pollBridgeMessages(channelId: string): Promise<void> {
         ),
         channelPrefix: channel.prefix || channel.name || channelId,
         titlePrefix,
-        style: channel.is_broadcast ? "broadcast" : "channel",
+        style: "channel",
       });
       for (const player of world.getAllPlayers()) {
         if (!isSubscribed(player.id, channelId)) continue;
-        if (
-          !channel.is_broadcast &&
-          row.created_at - bridgeLastTimestamp > 5 * 60 * 1000
-        ) {
+        if (row.created_at - bridgeLastTimestamp > 5 * 60 * 1000) {
           deliverLine(player, `§7${formatTimestamp(row.created_at)}`);
         }
         deliverLine(player, line);
@@ -454,12 +455,9 @@ export async function deliverChannelMessage(
     Msg.error("频道不存在。", sender);
     return { ok: false };
   }
-  if (channel.allow_chat === 0) {
-    Msg.error("当前频道禁止发言。", sender);
-    return { ok: false };
-  }
-  if (channel.is_broadcast && !canManageChannel(sender, channel)) {
-    Msg.error("该频道为公告板，只有频道所有者或管理员可以发言。", sender);
+  // 全体禁言：普通成员不能说，频道主和管理员仍可发言。
+  if (channel.allow_chat === 0 && !canManageChannel(sender, channel)) {
+    Msg.error("当前频道已全体禁言，只有频道主或管理员可以发言。", sender);
     return { ok: false };
   }
   if (channel.slow_mode > 0) {
@@ -486,7 +484,7 @@ export async function deliverChannelMessage(
     content: display,
     channelPrefix: channel.prefix || channel.name || channelId,
     titlePrefix,
-    style: channel.is_broadcast ? "broadcast" : "channel",
+    style: "channel",
   });
 
   const messageId = await persistMessage({
@@ -502,7 +500,7 @@ export async function deliverChannelMessage(
   ensureSubscribed(sender.id, channel.id);
   for (const player of world.getAllPlayers()) {
     if (!isSubscribed(player.id, channel.id)) continue;
-    if (showTimestamp && !channel.is_broadcast)
+    if (showTimestamp)
       deliverLine(player, `§7${formatTimestamp(Date.now())}`);
     deliverLine(player, formatted);
   }
@@ -593,7 +591,6 @@ export async function ensurePrivateChannel(
     owner_id: a.id,
     allow_chat: 1,
     slow_mode: 0,
-    is_broadcast: 0,
     members_json: JSON.stringify(ids),
   };
   await db.tx(async (tx) => await tx.insert(CHANNELS_TABLE, channel));
@@ -657,9 +654,8 @@ export async function loadChannelHistory(
 ): Promise<void> {
   const channel = await getChannel(channelId);
   if (!channel || !canAccessChannel(player, channel)) return;
-  const retention = channel.is_broadcast
-    ? Number.MAX_SAFE_INTEGER
-    : channel.type === "private"
+  const retention =
+    channel.type === "private"
       ? 30 * 24 * 60 * 60 * 1000
       : channel.type === "system"
         ? 24 * 60 * 60 * 1000
@@ -678,7 +674,7 @@ export async function loadChannelHistory(
   }
   deliverLine(player, `§7--- §f${channel.prefix} §7频道历史消息 ---`);
   for (const row of history) {
-    if (row.show_timestamp && !channel.is_broadcast) {
+    if (row.show_timestamp) {
       deliverLine(player, `§7${formatTimestamp(row.created_at)}`);
     }
     deliverLine(
@@ -716,7 +712,6 @@ export async function sendSystemMessage(
           owner_id: player.id,
           allow_chat: 0,
           slow_mode: 0,
-          is_broadcast: 0,
         }),
     );
   }
