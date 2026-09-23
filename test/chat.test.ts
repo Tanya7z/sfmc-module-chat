@@ -4,6 +4,8 @@ import { describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
 import { decorateMessageContent, formatChatLine } from "../sapi/src/format.ts";
 import { formatChannelRow } from "../sapi/src/ui-labels.ts";
+import { isQuickSwitchChannel } from "../sapi/src/channel-switch.ts";
+import { outgoingContentError } from "../sapi/src/send-validate.ts";
 import {
   clearPipeline,
   interceptorCount,
@@ -54,6 +56,31 @@ describe("chat format", () => {
     assert.equal(
       decorateMessageContent("teleport_invite", "来玩"),
       "§e[传送邀请] 来玩",
+    );
+  });
+});
+
+describe("chat quick switch", () => {
+  it("/c:c 包含本人 SYS，排除私聊与他人系统频道", () => {
+    assert.equal(
+      isQuickSwitchChannel({ type: "public", owner_id: "" }, "p1"),
+      true,
+    );
+    assert.equal(
+      isQuickSwitchChannel({ type: "custom", owner_id: "p1" }, "p1"),
+      true,
+    );
+    assert.equal(
+      isQuickSwitchChannel({ type: "system", owner_id: "p1" }, "p1"),
+      true,
+    );
+    assert.equal(
+      isQuickSwitchChannel({ type: "system", owner_id: "p2" }, "p1"),
+      false,
+    );
+    assert.equal(
+      isQuickSwitchChannel({ type: "private", owner_id: "p1" }, "p1"),
+      false,
     );
   });
 });
@@ -213,7 +240,12 @@ describe("chat 声明式 UI", () => {
         bind?: string;
         options?: { source?: string };
       }>;
-      actions: { send: { call: { input: Record<string, string> } } };
+      actions: {
+        send: {
+          call: { input: Record<string, string> };
+          onError: Array<{ effect?: string }>;
+        };
+      };
     };
     const target = compose.body.find((node) => node.id === "target");
     assert.equal(target?.type, "dropdown");
@@ -224,5 +256,19 @@ describe("chat 声明式 UI", () => {
       compose.actions.send.call.input.targetId,
       "{{state.targetId}}",
     );
+    assert.deepEqual(
+      compose.actions.send.onError.map((item) => item.effect),
+      ["message"],
+    );
+  });
+});
+
+describe("chat send validate", () => {
+  it("空内容与超长正文返回同一句失败原因，供表单或聊天自行展示", () => {
+    assert.equal(outgoingContentError(""), "消息为空或过长。");
+    assert.equal(outgoingContentError("   "), "消息为空或过长。");
+    assert.equal(outgoingContentError("ok"), undefined);
+    assert.equal(outgoingContentError("a".repeat(513)), "消息为空或过长。");
+    assert.equal(outgoingContentError("hi", "b".repeat(257)), "消息为空或过长。");
   });
 });

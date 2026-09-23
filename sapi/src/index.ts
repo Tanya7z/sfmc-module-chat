@@ -26,6 +26,7 @@ import {
   handlePlayerChat,
   loadChannelHistory,
   loadPlayerPreferences,
+  notifySendFailure,
   sendSystemMessage,
   sendPrivate,
   setChatStyle,
@@ -265,12 +266,16 @@ ModuleRegistry.register({
             const sender = findPlayer(String(input.senderId ?? ""));
             const target = findPlayer(targetId);
             if (!sender || !target) return { ok: false };
-            return sendPrivate(sender, target, content);
+            const result = await sendPrivate(sender, target, content);
+            notifySendFailure(sender, result);
+            return result;
           }
           const sender = findPlayer(String(input.senderId ?? ""));
           const channelId = String(input.channelId ?? "global");
           if (sender) {
-            return deliverChannelMessage(sender, channelId, content);
+            const result = await deliverChannelMessage(sender, channelId, content);
+            notifySendFailure(sender, result);
+            return result;
           }
           // 系统代发
           return broadcast({

@@ -6,8 +6,12 @@ import { Player, system, world } from "@minecraft/server";
 import { db } from "@sfmc-bds/sdk/sapi/db";
 import { Msg, Permission, debug } from "@sfmc-bds/sdk/sapi/runtime";
 import { getAvatarGlyph } from "./avatar.js";
+import { isQuickSwitchChannel } from "./channel-switch.js";
 import { decorateMessageContent, formatChatLine } from "./format.js";
 import { runObservers } from "./pipeline.js";
+import { outgoingContentError } from "./send-validate.js";
+
+export { outgoingContentError };
 
 export const CHANNELS_TABLE = "sfmc_chat_channels";
 export const MESSAGES_TABLE = "sfmc_chat_messages";
@@ -200,14 +204,14 @@ export function setActiveChannelId(playerId: string, channelId: string): void {
 export async function setActiveChannel(
   player: Player,
   channelId: string,
-): Promise<void> {
+): Promise<boolean> {
   const channel = await getChannel(channelId);
   if (!channel || !canAccessChannel(player, channel)) {
-    Msg.error("你无权访问该频道。", player);
-    return;
+    return false;
   }
   setActiveChannelId(player.id, channelId);
   await persistPlayerPreferences(player);
+  return true;
 }
 
 export function isSubscribed(playerId: string, channelId: string): boolean {
@@ -439,33 +443,57 @@ export async function persistMessage(row: {
   return id;
 }
 
+/**
+ * 发送结果：失败时带可展示文案，由调用方决定写到表单还是聊天。
+ * 使用场景：世界聊天走 Msg；私聊表单 onError 走 FormStatus。
+ */
+export type ChatSendResult =
+  | { ok: true; messageId?: string }
+  | { ok: false; message: string; tone?: "warning" };
+
+/** 世界聊天 / 命令侧展示发送失败；表单路径应 throw，不要走这里。 */
+export function notifySendFailure(player: Player, result: ChatSendResult): void {
+  if (result.ok) return;
+  if (result.tone === "warning") Msg.warning(result.message, player);
+  else Msg.error(result.message, player);
+}
+
+function sendRejected(
+  message: string,
+  tone?: "warning",
+): { ok: false; message: string; tone?: "warning" } {
+  return tone === "warning"
+    ? { ok: false, message, tone: "warning" }
+    : { ok: false, message };
+}
+
 export async function deliverChannelMessage(
   sender: Player,
   channelId: string,
   content: string,
   type = "chat",
   attachment = "",
-): Promise<{ ok: boolean; messageId?: string }> {
-  if (!content.trim() || content.length > 512 || attachment.length > 256) {
-    Msg.error("消息为空或过长。", sender);
-    return { ok: false };
-  }
+): Promise<ChatSendResult> {
+  const contentError = outgoingContentError(content, attachment);
+  if (contentError) return sendRejected(contentError);
   const channel = await getChannel(channelId);
   if (!channel) {
-    Msg.error("频道不存在。", sender);
-    return { ok: false };
+    return sendRejected("频道不存在。");
   }
   // 全体禁言：普通成员不能说，频道主和管理员仍可发言。
   if (channel.allow_chat === 0 && !canManageChannel(sender, channel)) {
-    Msg.error("当前频道已全体禁言，只有频道主或管理员可以发言。", sender);
-    return { ok: false };
+    return sendRejected(
+      "当前频道已全体禁言，只有频道主或管理员可以发言。",
+    );
   }
   if (channel.slow_mode > 0) {
     const last = slowModeTracker.get(sender.id)?.get(channel.id) ?? 0;
     const remaining = channel.slow_mode - (Date.now() - last) / 1000;
     if (remaining > 0) {
-      Msg.warning(`慢速模式中，请等待 ${Math.ceil(remaining)} 秒。`, sender);
-      return { ok: false };
+      return sendRejected(
+        `慢速模式中，请等待 ${Math.ceil(remaining)} 秒。`,
+        "warning",
+      );
     }
   }
 
@@ -526,11 +554,9 @@ export async function sendPrivate(
   content: string,
   type = "private",
   attachment = "",
-): Promise<{ ok: boolean; messageId?: string }> {
-  if (!content.trim() || content.length > 512 || attachment.length > 256) {
-    Msg.error("消息为空或过长。", sender);
-    return { ok: false };
-  }
+): Promise<ChatSendResult> {
+  const contentError = outgoingContentError(content, attachment);
+  if (contentError) return sendRejected(contentError);
   const channel = await ensurePrivateChannel(sender, target);
   const text = decorateMessageContent(content, colorCodes);
   const display = decorateMessageContent(type, text);
@@ -636,15 +662,15 @@ function canAccessChannel(player: Player, channel: ChannelRecord): boolean {
 export async function cycleChannel(
   player: Player,
 ): Promise<ChannelRecord | null> {
-  const channels = (await getChannels()).filter(
-    (channel) => channel.type !== "private" && channel.type !== "system",
+  const channels = (await getChannels()).filter((channel) =>
+    isQuickSwitchChannel(channel, player.id),
   );
   if (channels.length === 0) return null;
   const currentIndex = channels.findIndex(
     (channel) => channel.id === getActiveChannelId(player.id),
   );
   const next = channels[(currentIndex + 1) % channels.length] ?? channels[0];
-  await setActiveChannel(player, next.id);
+  if (!(await setActiveChannel(player, next.id))) return null;
   return next;
 }
 
@@ -749,7 +775,8 @@ export async function handlePlayerChat(
   message: string,
 ): Promise<void> {
   const channelId = getActiveChannelId(player.id);
-  await deliverChannelMessage(player, channelId, message);
+  const result = await deliverChannelMessage(player, channelId, message);
+  notifySendFailure(player, result);
 }
 
 export function findPlayerByName(name: string): Player | undefined {

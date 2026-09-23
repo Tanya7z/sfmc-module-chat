@@ -17,11 +17,13 @@ import {
   getPrivateChannels,
   isSubscribed,
   loadChannelHistory,
+  notifySendFailure,
   sendPrivate,
   setActiveChannel,
   toggleSubscription,
   updateChannel,
   type ChannelRecord,
+  type ChatSendResult,
 } from "./core.js";
 import { formatChannelRow } from "./ui-labels.js";
 
@@ -32,6 +34,24 @@ function player(input: Record<string, unknown>): Player {
     .find((candidate) => candidate.id === playerId);
   if (!found) throw new Error("玩家不在线");
   return found;
+}
+
+/**
+ * 发送失败转成表单可展示的异常，避免 {ok:false} 被当成成功。
+ * 使用场景：发起私聊、传送邀请等仍停留在当前表单的动作。
+ */
+function requireSent(result: ChatSendResult): void {
+  if (!result.ok) throw new Error(result.message);
+}
+
+/** 切换当前发送频道失败时抛出，供声明式 onError 写到状态行。 */
+async function requireActiveChannel(
+  actor: Player,
+  channelId: string,
+): Promise<void> {
+  if (!(await setActiveChannel(actor, channelId))) {
+    throw new Error("你无权访问该频道。");
+  }
 }
 
 /** 频道标题，用于按钮、提示和成功回执。 */
@@ -112,7 +132,7 @@ async function setSubscribed(input: Record<string, unknown>) {
   if (!want && channel.id === getActiveChannelId(actor.id)) {
     const fallback = rows.find((candidate) => candidate.type === "public");
     if (fallback) {
-      await setActiveChannel(actor, fallback.id);
+      await requireActiveChannel(actor, fallback.id);
       await loadChannelHistory(actor, fallback.id);
     }
   }
@@ -242,7 +262,7 @@ async function activatePrivate(input: Record<string, unknown>) {
     (candidate) => candidate.id === channelId,
   );
   if (!channel) throw new Error("私聊频道不存在");
-  await setActiveChannel(actor, channel.id);
+  await requireActiveChannel(actor, channel.id);
   await loadChannelHistory(actor, channel.id);
   return { ok: true, name: channel.name };
 }
@@ -261,8 +281,8 @@ async function compose(input: Record<string, unknown>) {
   const content = String(input.content ?? "").trim();
   if (!content) throw new Error("消息不能为空");
   const channel = await ensurePrivateChannel(actor, target);
-  await setActiveChannel(actor, channel.id);
-  await sendPrivate(actor, target, content);
+  await requireActiveChannel(actor, channel.id);
+  requireSent(await sendPrivate(actor, target, content));
   return { ok: true, targetName: target.name };
 }
 
@@ -284,11 +304,13 @@ async function invite(input: Record<string, unknown>) {
   if (!target || target.id === actor.id) throw new Error("目标玩家不在线");
   const loc = actor.location;
   const location = `${actor.dimension.id}:${Math.floor(loc.x)},${Math.floor(loc.y)},${Math.floor(loc.z)}`;
-  await sendPrivate(
-    actor,
-    target,
-    `${actor.name} 邀请你传送到他的位置！（${location}）`,
-    "teleport_invite",
+  requireSent(
+    await sendPrivate(
+      actor,
+      target,
+      `${actor.name} 邀请你传送到他的位置！（${location}）`,
+      "teleport_invite",
+    ),
   );
   return { ok: true, targetName: target.name };
 }
@@ -307,12 +329,13 @@ export async function preparePrivateChannel(
 export async function shareLocation(player: Player): Promise<void> {
   const loc = player.location;
   const content = `${player.dimension.id}:${Math.floor(loc.x)},${Math.floor(loc.y)},${Math.floor(loc.z)}`;
-  await deliverChannelMessage(
+  const result = await deliverChannelMessage(
     player,
     getActiveChannelId(player.id),
     content,
     "location",
   );
+  notifySendFailure(player, result);
 }
 
 export async function cycleActiveChannel(player: Player): Promise<void> {
