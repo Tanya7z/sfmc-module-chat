@@ -29,6 +29,10 @@
     "allowChat": {
       "type": "boolean",
       "default": true
+    },
+    "forwardToQQ": {
+      "type": "boolean",
+      "default": true
     }
   },
   "load": {
@@ -91,11 +95,33 @@
       "description": "关闭后仅频道主和管理员可发言",
       "tooltip": "关闭后仅频道主和管理员可发言",
       "bind": "state.allowChat",
+      "visibleWhen": {
+        "ref": "data.channel.qqReadOnly",
+        "equals": false
+      },
       "trigger": {
         "type": "action",
         "action": "toggleAllowChat",
         "input": {
           "allowChat": "{{state.allowChat}}"
+        }
+      }
+    },
+    {
+      "id": "forward-to-qq",
+      "type": "toggle",
+      "label": "转发到 QQ",
+      "description": "开启后，此频道的玩家发言会发送到 QQ 群",
+      "bind": "state.forwardToQQ",
+      "visibleWhen": {
+        "ref": "data.channel.qqReadOnly",
+        "equals": false
+      },
+      "trigger": {
+        "type": "action",
+        "action": "setForwardToQQ",
+        "input": {
+          "forwardToQQ": "{{state.forwardToQQ}}"
         }
       }
     },
@@ -180,7 +206,8 @@
         "service": "chat.ui.toggleAllowChat",
         "input": {
           "playerId": "{{player.id}}",
-          "channelId": "{{params.channelId}}"
+          "channelId": "{{params.channelId}}",
+          "allowChat": "{{state.allowChat}}"
         }
       },
       "onSuccess": [
@@ -198,6 +225,18 @@
           "effect": "refresh"
         }
       ]
+    },
+    "setForwardToQQ": {
+      "call": {
+        "service": "chat.ui.setForwardToQQ",
+        "input": {
+          "playerId": "{{player.id}}",
+          "channelId": "{{params.channelId}}",
+          "forwardToQQ": "{{state.forwardToQQ}}"
+        }
+      },
+      "onSuccess": [{ "effect": "refresh" }],
+      "onError": [{ "effect": "message", "text": "转发设置保存失败：{{result.message}}", "tone": "danger" }]
     },
     "delete": {
       "confirm": {

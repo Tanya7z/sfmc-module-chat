@@ -18,6 +18,7 @@ export const MESSAGES_TABLE = "sfmc_chat_messages";
 export const AVATARS_TABLE = "sfmc_chat_avatars";
 
 const DEFAULT_CHANNEL = "global";
+const QQ_CHANNEL = "qq";
 /** 已废弃的内置公告频道 id；启动时若仍是无主内置项则删除。 */
 const BUILTIN_ANNOUNCE_CHANNEL_ID = "broadcast";
 const activeChannel = new Map<string, string>();
@@ -42,6 +43,7 @@ export interface ChannelRecord extends Record<string, unknown> {
    * 使用场景：频道设置「允许发言」开关；投递前校验发言资格。
    */
   allow_chat: number;
+  forward_to_qq: number;
   slow_mode: number;
   members_json?: string;
 }
@@ -77,6 +79,21 @@ export async function ensureDefaultChannels(): Promise<void> {
         prefix: "PB",
         owner_id: "",
         allow_chat: 1,
+        forward_to_qq: 1,
+        slow_mode: 0,
+      });
+    });
+  }
+  if (!(await getChannel(QQ_CHANNEL))) {
+    await db.tx(async (tx) => {
+      await tx.insert(CHANNELS_TABLE, {
+        id: QQ_CHANNEL,
+        name: "QQ 群聊",
+        type: "public",
+        prefix: "QQ",
+        owner_id: "",
+        allow_chat: 0,
+        forward_to_qq: 0,
         slow_mode: 0,
       });
     });
@@ -141,6 +158,7 @@ export async function createChannel(
     prefix: normalizedPrefix,
     owner_id: owner.id,
     allow_chat: 1,
+    forward_to_qq: 1,
     slow_mode: 0,
     members_json: "[]",
   };
@@ -153,7 +171,7 @@ export async function updateChannel(
   actor: Player,
   channelId: string,
   patch: Partial<
-    Pick<ChannelRecord, "name" | "prefix" | "allow_chat" | "slow_mode">
+    Pick<ChannelRecord, "name" | "prefix" | "allow_chat" | "forward_to_qq" | "slow_mode">
   >,
 ): Promise<boolean> {
   const channel = await getChannel(channelId);
@@ -259,7 +277,7 @@ export async function loadPlayerPreferences(player: Player): Promise<void> {
     const available = new Map(
       (await getChannels()).map((channel) => [channel.id, channel]),
     );
-    const ids = new Set<string>([DEFAULT_CHANNEL]);
+    const ids = new Set<string>([DEFAULT_CHANNEL, QQ_CHANNEL]);
     if (row?.subscribed_channels) {
       const stored = JSON.parse(row.subscribed_channels) as unknown;
       if (Array.isArray(stored)) {
@@ -283,7 +301,7 @@ export async function loadPlayerPreferences(player: Player): Promise<void> {
       "CHAT",
       `load prefs: ${err instanceof Error ? err.message : String(err)}`,
     );
-    subscribedChannels.set(player.id, new Set([DEFAULT_CHANNEL]));
+    subscribedChannels.set(player.id, new Set([DEFAULT_CHANNEL, QQ_CHANNEL]));
     activeChannel.set(player.id, DEFAULT_CHANNEL);
   }
 }
@@ -399,6 +417,7 @@ async function pollBridgeMessages(channelId: string): Promise<void> {
 function ensureSubscribed(playerId: string, channelId: string): void {
   const ids = subscribedChannels.get(playerId) ?? new Set<string>();
   ids.add(DEFAULT_CHANNEL);
+  ids.add(QQ_CHANNEL);
   ids.add(channelId);
   subscribedChannels.set(playerId, ids);
 }
@@ -481,6 +500,7 @@ export async function deliverChannelMessage(
     return sendRejected("频道不存在。");
   }
   // 全体禁言：普通成员不能说，频道主和管理员仍可发言。
+  if (channel.id === QQ_CHANNEL) return sendRejected("QQ 频道仅接收群消息，玩家不能发言。");
   if (channel.allow_chat === 0 && !canManageChannel(sender, channel)) {
     return sendRejected(
       "当前频道已全体禁言，只有频道主或管理员可以发言。",
@@ -616,6 +636,7 @@ export async function ensurePrivateChannel(
     prefix: "私聊",
     owner_id: a.id,
     allow_chat: 1,
+    forward_to_qq: 1,
     slow_mode: 0,
     members_json: JSON.stringify(ids),
   };
@@ -737,6 +758,7 @@ export async function sendSystemMessage(
           prefix: "SYS",
           owner_id: player.id,
           allow_chat: 0,
+          forward_to_qq: 0,
           slow_mode: 0,
         }),
     );

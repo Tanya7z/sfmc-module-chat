@@ -5,7 +5,7 @@
 import { Player, world } from "@minecraft/server";
 import { config } from "@sfmc-bds/sdk/sapi/config";
 import { db } from "@sfmc-bds/sdk/sapi/db";
-import { ConfigManager, ModuleRegistry } from "@sfmc-bds/sdk/module-loader";
+import { ModuleRegistry } from "@sfmc-bds/sdk/module-loader";
 import {
   Command,
   debug,
@@ -74,6 +74,7 @@ async function defineTables(): Promise<void> {
     prefix: { type: "TEXT", default: "" },
     owner_id: { type: "TEXT", default: "" },
     allow_chat: { type: "INTEGER", default: 1 },
+    forward_to_qq: { type: "INTEGER", default: 1 },
     slow_mode: { type: "INTEGER", default: 0 },
     members_json: { type: "TEXT", default: "[]" },
   });
@@ -224,7 +225,7 @@ ModuleRegistry.register({
       await defineTables();
       await ensureDefaultChannels();
       startBridgePolling(
-        ConfigManager.getSetting("bridge_channel_id", ""),
+        "qq",
         (await config.get<number>("bridge_poll_ticks")) ?? 600,
       );
       for (const player of world.getAllPlayers()) {

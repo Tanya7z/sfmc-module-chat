@@ -165,6 +165,7 @@ async function managedChannel(
 async function channelDetail(input: Record<string, unknown>) {
   const { channel } = await managedChannel(input);
   const allowChat = Boolean(channel.allow_chat);
+  const forwardToQQ = Boolean(channel.forward_to_qq);
   return {
     id: channel.id,
     name: channel.name,
@@ -172,6 +173,8 @@ async function channelDetail(input: Record<string, unknown>) {
     type: channel.type,
     slowMode: channel.slow_mode,
     allowChat,
+    forwardToQQ,
+    qqReadOnly: channel.id === "qq",
     allowChatText: allowChat ? "是" : "否",
     canDelete: channel.type !== "public",
   };
@@ -219,10 +222,21 @@ function wantFlag(input: Record<string, unknown>, key: string): boolean {
  */
 async function setAllowChat(input: Record<string, unknown>) {
   const { actor, channel } = await managedChannel(input);
+  if (channel.id === "qq") throw new Error("QQ 频道始终只读");
   const next = wantFlag(input, "allowChat") ? 1 : 0;
   if (channel.allow_chat === next) return { ok: true, value: next };
   if (!(await updateChannel(actor, channel.id, { allow_chat: next }))) {
     throw new Error("频道设置更新失败");
+  }
+  return { ok: true, value: next };
+}
+
+async function setForwardToQQ(input: Record<string, unknown>) {
+  const { actor, channel } = await managedChannel(input);
+  if (channel.id === "qq") throw new Error("QQ 频道不能转发回 QQ");
+  const next = wantFlag(input, "forwardToQQ") ? 1 : 0;
+  if (channel.forward_to_qq !== next && !(await updateChannel(actor, channel.id, { forward_to_qq: next }))) {
+    throw new Error("频道转发设置更新失败");
   }
   return { ok: true, value: next };
 }
@@ -358,6 +372,7 @@ export const chatUiServices: Record<
   "chat.ui.channel": channelDetail,
   "chat.ui.saveChannel": saveChannel,
   "chat.ui.toggleAllowChat": setAllowChat,
+  "chat.ui.setForwardToQQ": setForwardToQQ,
   "chat.ui.deleteChannel": removeChannel,
   "chat.ui.createChannel": create,
   "chat.ui.privateChannels": privateChannels,
