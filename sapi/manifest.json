@@ -1,8 +1,8 @@
 {
-  "$schema": "https://raw.githubusercontent.com/DogeLakeDev/ScriptsForMinecraftServer/main/modules/sdk/@sfmc-sdk/schemas/sapi-manifest.v2.schema.json",
+  "$schema": "https://cdn.jsdelivr.net/gh/DogeLakeDev/ScriptsForMinecraftServer@main/modules/sdk/@sfmc-sdk/schemas/sapi-manifest.v2.schema.json",
   "schemaVersion": 2,
   "id": "chat",
-  "name": "聊天管道",
+  "name": "Chat",
   "configKey": "chat",
   "enabledByDefault": true,
   "canDisable": true,
@@ -15,6 +15,8 @@
     "db:write:sfmc_chat_messages",
     "db:read:sfmc_chat_avatars",
     "db:write:sfmc_chat_avatars",
+    "db:read:sfmc_chat_meta",
+    "db:write:sfmc_chat_meta",
     "db:read:sfmc_players",
     "db:write:sfmc_players",
     "service:chat.openChannelPanel",
@@ -25,10 +27,13 @@
     "service:chat.onMessage",
     "service:chat.ui.channels",
     "service:chat.ui.setSubscribed",
+    "service:chat.ui.activateChannel",
     "service:chat.ui.manager",
     "service:chat.ui.channel",
     "service:chat.ui.saveChannel",
     "service:chat.ui.toggleAllowChat",
+    "service:chat.ui.setForwardToQQ",
+    "service:chat.ui.setChannelSource",
     "service:chat.ui.deleteChannel",
     "service:chat.ui.createChannel",
     "service:chat.ui.privateChannels",
@@ -104,6 +109,11 @@
         "output": { "type": "object" }
       },
       {
+        "name": "chat.ui.activateChannel",
+        "input": { "type": "object" },
+        "output": { "type": "object" }
+      },
+      {
         "name": "chat.ui.manager",
         "input": { "type": "object" },
         "output": { "type": "object" }
@@ -120,6 +130,16 @@
       },
       {
         "name": "chat.ui.toggleAllowChat",
+        "input": { "type": "object" },
+        "output": { "type": "object" }
+      },
+      {
+        "name": "chat.ui.setForwardToQQ",
+        "input": { "type": "object" },
+        "output": { "type": "object" }
+      },
+      {
+        "name": "chat.ui.setChannelSource",
         "input": { "type": "object" },
         "output": { "type": "object" }
       },

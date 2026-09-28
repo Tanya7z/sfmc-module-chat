@@ -1,8 +1,8 @@
 {
-  "$schema": "https://raw.githubusercontent.com/DogeLakeDev/ScriptsForMinecraftServer/main/modules/sdk/@sfmc-sdk/schemas/ui-screen.v1.schema.json",
+  "$schema": "https://cdn.jsdelivr.net/gh/DogeLakeDev/ScriptsForMinecraftServer@main/modules/sdk/@sfmc-sdk/schemas/ui-screen.v1.schema.json",
   "formatVersion": 1,
   "id": "chat.settings",
-  "name": "chat.settings",
+  "name": "设置",
   "presentation": "form",
   "title": "频道设置",
   "params": {
@@ -33,6 +33,18 @@
     "forwardToQQ": {
       "type": "boolean",
       "default": true
+    },
+    "sourceGame": {
+      "type": "boolean",
+      "default": true
+    },
+    "sourceQQ": {
+      "type": "boolean",
+      "default": false
+    },
+    "sourceSystem": {
+      "type": "boolean",
+      "default": false
     }
   },
   "load": {
@@ -89,16 +101,63 @@
       "size": "small"
     },
     {
+      "id": "source-heading",
+      "type": "text",
+      "text": "频道消息来源"
+    },
+    {
+      "id": "source-game",
+      "type": "toggle",
+      "label": "游戏内输入",
+      "description": "允许玩家向此频道发送消息",
+      "bind": "state.sourceGame",
+      "trigger": {
+        "type": "action",
+        "action": "setSourceGame",
+        "input": {
+          "enabled": "{{state.sourceGame}}"
+        }
+      }
+    },
+    {
+      "id": "source-qq",
+      "type": "toggle",
+      "label": "QQ 转发",
+      "description": "接收桥接写入此频道的 QQ 消息",
+      "bind": "state.sourceQQ",
+      "trigger": {
+        "type": "action",
+        "action": "setSourceQQ",
+        "input": {
+          "enabled": "{{state.sourceQQ}}"
+        }
+      }
+    },
+    {
+      "id": "source-system",
+      "type": "toggle",
+      "label": "系统消息",
+      "description": "接收发往此频道的系统消息",
+      "bind": "state.sourceSystem",
+      "trigger": {
+        "type": "action",
+        "action": "setSourceSystem",
+        "input": {
+          "enabled": "{{state.sourceSystem}}"
+        }
+      }
+    },
+    {
+      "id": "source-divider",
+      "type": "divider"
+    },
+    {
       "id": "allow-chat",
       "type": "toggle",
       "label": "允许发言",
       "description": "关闭后仅频道主和管理员可发言",
       "tooltip": "关闭后仅频道主和管理员可发言",
       "bind": "state.allowChat",
-      "visibleWhen": {
-        "ref": "data.channel.qqReadOnly",
-        "equals": false
-      },
       "trigger": {
         "type": "action",
         "action": "toggleAllowChat",
@@ -113,10 +172,6 @@
       "label": "转发到 QQ",
       "description": "开启后，此频道的玩家发言会发送到 QQ 群",
       "bind": "state.forwardToQQ",
-      "visibleWhen": {
-        "ref": "data.channel.qqReadOnly",
-        "equals": false
-      },
       "trigger": {
         "type": "action",
         "action": "setForwardToQQ",
@@ -172,6 +227,84 @@
     }
   ],
   "actions": {
+    "setSourceGame": {
+      "call": {
+        "service": "chat.ui.setChannelSource",
+        "input": {
+          "playerId": "{{player.id}}",
+          "channelId": "{{params.channelId}}",
+          "source": "game",
+          "enabled": "{{state.sourceGame}}"
+        }
+      },
+      "onSuccess": [
+        {
+          "effect": "refresh"
+        }
+      ],
+      "onError": [
+        {
+          "effect": "message",
+          "text": "消息来源更新失败：{{result.message}}",
+          "tone": "danger"
+        },
+        {
+          "effect": "refresh"
+        }
+      ]
+    },
+    "setSourceQQ": {
+      "call": {
+        "service": "chat.ui.setChannelSource",
+        "input": {
+          "playerId": "{{player.id}}",
+          "channelId": "{{params.channelId}}",
+          "source": "qq",
+          "enabled": "{{state.sourceQQ}}"
+        }
+      },
+      "onSuccess": [
+        {
+          "effect": "refresh"
+        }
+      ],
+      "onError": [
+        {
+          "effect": "message",
+          "text": "消息来源更新失败：{{result.message}}",
+          "tone": "danger"
+        },
+        {
+          "effect": "refresh"
+        }
+      ]
+    },
+    "setSourceSystem": {
+      "call": {
+        "service": "chat.ui.setChannelSource",
+        "input": {
+          "playerId": "{{player.id}}",
+          "channelId": "{{params.channelId}}",
+          "source": "system",
+          "enabled": "{{state.sourceSystem}}"
+        }
+      },
+      "onSuccess": [
+        {
+          "effect": "refresh"
+        }
+      ],
+      "onError": [
+        {
+          "effect": "message",
+          "text": "消息来源更新失败：{{result.message}}",
+          "tone": "danger"
+        },
+        {
+          "effect": "refresh"
+        }
+      ]
+    },
     "save": {
       "call": {
         "service": "chat.ui.saveChannel",
@@ -190,7 +323,7 @@
           "tone": "success"
         },
         {
-          "effect": "refresh"
+          "effect": "back"
         }
       ],
       "onError": [
@@ -235,8 +368,18 @@
           "forwardToQQ": "{{state.forwardToQQ}}"
         }
       },
-      "onSuccess": [{ "effect": "refresh" }],
-      "onError": [{ "effect": "message", "text": "转发设置保存失败：{{result.message}}", "tone": "danger" }]
+      "onSuccess": [
+        {
+          "effect": "refresh"
+        }
+      ],
+      "onError": [
+        {
+          "effect": "message",
+          "text": "转发设置保存失败：{{result.message}}",
+          "tone": "danger"
+        }
+      ]
     },
     "delete": {
       "confirm": {

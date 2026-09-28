@@ -6,11 +6,11 @@ export type ChannelRowState = {
   title: string;
   /** 当前订阅该频道的在线人数。 */
   onlineCount: number;
-  /** 玩家是否已订阅（公共频道视为始终订阅）。 */
+  /** 玩家是否已订阅。公共频道和 QQ 也可以退订。 */
   subscribed: boolean;
   /** 是否为当前发送频道（仅展示，发送切换走指令）。 */
   active: boolean;
-  /** 是否允许取消订阅（公共频道不行）。 */
+  /** 是否允许取消订阅。频道面板里的频道都为 true。 */
   canUnsubscribe: boolean;
 };
 
@@ -22,7 +22,7 @@ export type ChannelRow = {
   status: string;
   /** 订阅开关的当前值。 */
   subscribed: boolean;
-  /** 公共频道锁定订阅开关。 */
+  /** 订阅开关是否可点。 */
   canUnsubscribe: boolean;
 };
 

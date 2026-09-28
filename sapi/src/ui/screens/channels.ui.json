@@ -1,8 +1,8 @@
 {
-  "$schema": "https://raw.githubusercontent.com/DogeLakeDev/ScriptsForMinecraftServer/main/modules/sdk/@sfmc-sdk/schemas/ui-screen.v1.schema.json",
+  "$schema": "https://cdn.jsdelivr.net/gh/DogeLakeDev/ScriptsForMinecraftServer@main/modules/sdk/@sfmc-sdk/schemas/ui-screen.v1.schema.json",
   "formatVersion": 1,
   "id": "chat.channels",
-  "name": "chat.channels",
+  "name": "频道",
   "presentation": "reactive",
   "title": "聊天频道",
   "load": {
@@ -42,6 +42,11 @@
     {
       "id": "divider-2",
       "type": "divider"
+    },
+    {
+      "id": "active-target",
+      "type": "text",
+      "text": "当前发送至：{{data.model.activeLabel}}"
     },
     {
       "id": "spacer-2",
@@ -99,6 +104,20 @@
           }
         },
         {
+          "id": "activate",
+          "type": "button",
+          "label": "在此发言",
+          "disabledWhen": {
+            "op": "not",
+            "args": [{ "ref": "channel.canSend" }]
+          },
+          "trigger": {
+            "type": "action",
+            "action": "activateChannel",
+            "input": { "channelId": "{{channel.id}}" }
+          }
+        },
+        {
           "id": "spacer-3",
           "type": "spacer",
           "size": "medium"
@@ -116,22 +135,6 @@
     {
       "id": "divider",
       "type": "divider"
-    },
-    {
-      "id": "refresh",
-      "type": "button",
-      "label": "刷新",
-      "trigger": {
-        "type": "refresh"
-      }
-    },
-    {
-      "id": "close",
-      "type": "button",
-      "label": "关闭",
-      "trigger": {
-        "type": "close"
-      }
     }
   ],
   "actions": {
@@ -141,6 +144,20 @@
         "input": {
           "playerId": "{{player.id}}"
         }
+      },
+      "activateChannel": {
+        "call": {
+          "service": "chat.ui.activateChannel",
+          "input": { "playerId": "{{player.id}}" }
+        },
+        "onSuccess": [{ "effect": "refresh" }],
+        "onError": [
+          {
+            "effect": "message",
+            "text": "切换失败：{{result.message}}",
+            "tone": "danger"
+          }
+        ]
       },
       "onSuccess": [
         {

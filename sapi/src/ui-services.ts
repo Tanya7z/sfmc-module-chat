@@ -14,6 +14,7 @@ import {
   getChannel,
   getChannels,
   getOnlineCount,
+  canSendToChannel,
   getPrivateChannels,
   isSubscribed,
   loadChannelHistory,
@@ -63,17 +64,30 @@ function channelTitle(channel: ChannelRecord): string {
  * 频道面板可展示的频道列表。
  * 使用场景：频道面板列出可订阅的公共/自建频道，排除私聊与系统频道。
  */
-async function listDisplayChannels(): Promise<ChannelRecord[]> {
+async function listDisplayChannels(actor?: Player): Promise<ChannelRecord[]> {
   return (await getChannels()).filter(
-    (channel) => channel.type !== "private" && channel.type !== "system",
+    (channel) =>
+      channel.type !== "private" &&
+      (!actor ||
+        !channel.members_json ||
+        channel.members_json === "[]" ||
+        (() => {
+          try {
+            const members = JSON.parse(channel.members_json!) as unknown;
+            return Array.isArray(members) && members.includes(actor.id);
+          } catch {
+            return false;
+          }
+        })()),
   );
 }
 
 /** 按 id 取出可展示频道；找不到时抛出页面可展示的错误。 */
 async function requireDisplayChannel(
+  actor: Player,
   channelId: string,
 ): Promise<{ channel: ChannelRecord; rows: ChannelRecord[] }> {
-  const rows = await listDisplayChannels();
+  const rows = await listDisplayChannels(actor);
   const channel = rows.find((candidate) => candidate.id === channelId);
   if (!channel) throw new Error("频道不存在");
   return { channel, rows };
@@ -83,19 +97,13 @@ async function requireDisplayChannel(
  * 组装频道面板一行：名称、状态、订阅开关。
  * 使用场景：chat.channels 用文字展示状态，用开关只改订阅。
  */
-function channelItem(
-  channel: ChannelRecord,
-  actor: Player,
-  activeId: string,
-) {
-  const subscribed =
-    channel.type === "public" || isSubscribed(actor.id, channel.id);
+function channelItem(channel: ChannelRecord, actor: Player, activeId: string) {
   const row = formatChannelRow({
     title: channelTitle(channel),
     onlineCount: getOnlineCount(channel.id),
-    subscribed,
+    subscribed: isSubscribed(actor.id, channel.id),
     active: channel.id === activeId,
-    canUnsubscribe: channel.type !== "public",
+    canUnsubscribe: true,
   });
   return { id: channel.id, ...row };
 }
@@ -103,37 +111,43 @@ function channelItem(
 async function channels(input: Record<string, unknown>) {
   const actor = player(input);
   const activeId = getActiveChannelId(actor.id);
-  const rows = await listDisplayChannels();
+  const rows = await listDisplayChannels(actor);
   const active = rows.find((channel) => channel.id === activeId);
   return {
     activeLabel: active ? channelTitle(active) : activeId,
-    items: rows.map((channel) => channelItem(channel, actor, activeId)),
+    needsTarget: !active,
+    items: rows.map((channel) => ({
+      ...channelItem(channel, actor, activeId),
+      canSend: canSendToChannel(actor, channel),
+    })),
   };
 }
 
 /**
  * 只改订阅，不切换当前发送频道。
- * 使用场景：频道面板订阅开关即时生效；若退订的是正在发送的频道，才回退到公共频道以免发到已退订频道。
+ * 使用场景：频道面板订阅开关即时生效。公共频道和 QQ 也可以退订；
+ * 若退订的是正在发送的频道，改到仍订阅的其他频道，避免下一句又订回去。
  */
 async function setSubscribed(input: Record<string, unknown>) {
   const actor = player(input);
   const { channel, rows } = await requireDisplayChannel(
+    actor,
     String(input.channelId ?? ""),
   );
-  const want =
-    input.subscribed === true || input.subscribed === "true";
-  if (channel.type === "public") {
-    if (!want) throw new Error("公共频道不能取消订阅");
-    return { ok: true, name: channelTitle(channel) };
-  }
+  const want = input.subscribed === true || input.subscribed === "true";
   const now = isSubscribed(actor.id, channel.id);
   if (want === now) return { ok: true, name: channelTitle(channel) };
-  await toggleSubscription(actor, channel.id);
+  const result = await toggleSubscription(actor, channel.id);
+  if (result === now) throw new Error("订阅保存失败，请重试。");
   if (!want && channel.id === getActiveChannelId(actor.id)) {
-    const fallback = rows.find((candidate) => candidate.type === "public");
+    const fallback = rows.find(
+      (candidate) =>
+        candidate.id !== channel.id &&
+        isSubscribed(actor.id, candidate.id) &&
+        canSendToChannel(actor, candidate),
+    );
     if (fallback) {
       await requireActiveChannel(actor, fallback.id);
-      await loadChannelHistory(actor, fallback.id);
     }
   }
   return { ok: true, name: channelTitle(channel) };
@@ -141,7 +155,7 @@ async function setSubscribed(input: Record<string, unknown>) {
 
 async function manager(input: Record<string, unknown>) {
   const actor = player(input);
-  const rows = await getChannels();
+  const rows = await listDisplayChannels(actor);
   return {
     count: rows.length,
     items: rows.map((channel) => ({
@@ -163,7 +177,7 @@ async function managedChannel(
 }
 
 async function channelDetail(input: Record<string, unknown>) {
-  const { channel } = await managedChannel(input);
+  const { actor, channel } = await managedChannel(input);
   const allowChat = Boolean(channel.allow_chat);
   const forwardToQQ = Boolean(channel.forward_to_qq);
   return {
@@ -174,9 +188,12 @@ async function channelDetail(input: Record<string, unknown>) {
     slowMode: channel.slow_mode,
     allowChat,
     forwardToQQ,
-    qqReadOnly: channel.id === "qq",
+    sourceGame: channel.source_game === 1,
+    sourceQQ: channel.source_qq === 1,
+    sourceSystem: channel.source_system === 1,
     allowChatText: allowChat ? "是" : "否",
-    canDelete: channel.type !== "public",
+    canDelete: true,
+    canSend: canSendToChannel(actor, channel),
   };
 }
 
@@ -191,6 +208,14 @@ async function saveChannel(input: Record<string, unknown>) {
 
   if (name) {
     if (name.length > 32) throw new Error("频道名称最长 32 字");
+    if (
+      (await getChannels()).some(
+        (item) =>
+          item.id !== channel.id &&
+          item.name.trim().toLocaleLowerCase() === name.toLocaleLowerCase(),
+      )
+    )
+      throw new Error("频道名称已存在");
     patch.name = name;
   }
   if (prefix) {
@@ -222,7 +247,6 @@ function wantFlag(input: Record<string, unknown>, key: string): boolean {
  */
 async function setAllowChat(input: Record<string, unknown>) {
   const { actor, channel } = await managedChannel(input);
-  if (channel.id === "qq") throw new Error("QQ 频道始终只读");
   const next = wantFlag(input, "allowChat") ? 1 : 0;
   if (channel.allow_chat === next) return { ok: true, value: next };
   if (!(await updateChannel(actor, channel.id, { allow_chat: next }))) {
@@ -233,10 +257,50 @@ async function setAllowChat(input: Record<string, unknown>) {
 
 async function setForwardToQQ(input: Record<string, unknown>) {
   const { actor, channel } = await managedChannel(input);
-  if (channel.id === "qq") throw new Error("QQ 频道不能转发回 QQ");
   const next = wantFlag(input, "forwardToQQ") ? 1 : 0;
-  if (channel.forward_to_qq !== next && !(await updateChannel(actor, channel.id, { forward_to_qq: next }))) {
+  if (
+    channel.forward_to_qq !== next &&
+    !(await updateChannel(actor, channel.id, { forward_to_qq: next }))
+  ) {
     throw new Error("频道转发设置更新失败");
+  }
+  return { ok: true, value: next };
+}
+
+/** 三种消息来源独立配置，关闭来源会在对应投递入口生效。 */
+async function setChannelSource(input: Record<string, unknown>) {
+  const { actor, channel } = await managedChannel(input);
+  const fields = {
+    game: "source_game",
+    qq: "source_qq",
+    system: "source_system",
+  } as const;
+  const source = String(input.source ?? "");
+  if (!(source in fields)) throw new Error("未知的消息来源");
+  const field = fields[source as keyof typeof fields];
+  const next = wantFlag(input, "enabled") ? 1 : 0;
+  if (channel[field] !== next) {
+    if (
+      !(await updateChannel(actor, channel.id, {
+        [field]: next,
+        source_configured: 1,
+      }))
+    ) {
+      throw new Error("频道消息来源更新失败");
+    }
+  }
+  if (
+    field === "source_game" &&
+    next === 0 &&
+    getActiveChannelId(actor.id) === channel.id
+  ) {
+    const fallback = (await getChannels()).find(
+      (candidate) =>
+        candidate.id !== channel.id &&
+        isSubscribed(actor.id, candidate.id) &&
+        canSendToChannel(actor, candidate),
+    );
+    if (fallback) await requireActiveChannel(actor, fallback.id);
   }
   return { ok: true, value: next };
 }
@@ -279,6 +343,17 @@ async function activatePrivate(input: Record<string, unknown>) {
   await requireActiveChannel(actor, channel.id);
   await loadChannelHistory(actor, channel.id);
   return { ok: true, name: channel.name };
+}
+
+async function activateChannel(input: Record<string, unknown>) {
+  const actor = player(input);
+  const channelId = String(input.channelId ?? "");
+  const channel = (await listDisplayChannels(actor)).find(
+    (candidate) => candidate.id === channelId,
+  );
+  if (!channel) throw new Error("频道不存在");
+  await requireActiveChannel(actor, channelId);
+  return { ok: true, name: channelTitle(channel) };
 }
 
 /**
@@ -368,11 +443,13 @@ export const chatUiServices: Record<
 > = {
   "chat.ui.channels": channels,
   "chat.ui.setSubscribed": setSubscribed,
+  "chat.ui.activateChannel": activateChannel,
   "chat.ui.manager": manager,
   "chat.ui.channel": channelDetail,
   "chat.ui.saveChannel": saveChannel,
   "chat.ui.toggleAllowChat": setAllowChat,
   "chat.ui.setForwardToQQ": setForwardToQQ,
+  "chat.ui.setChannelSource": setChannelSource,
   "chat.ui.deleteChannel": removeChannel,
   "chat.ui.createChannel": create,
   "chat.ui.privateChannels": privateChannels,

@@ -23,6 +23,7 @@ import {
   deliverChannelMessage,
   ensureDefaultChannels,
   getActiveChannelId,
+  getDefaultSendChannelId,
   handlePlayerChat,
   loadChannelHistory,
   loadPlayerPreferences,
@@ -61,6 +62,8 @@ const MODULE_ID = "chat";
 
 const unprovide: Array<() => void> = [];
 const eventCleanups: Array<() => void> = [];
+let systemMsgCleanup: (() => void) | undefined;
+let activeLifecycle = false;
 
 function findPlayer(playerId: string): Player | undefined {
   return world.getAllPlayers().find((p) => p.id === playerId);
@@ -75,6 +78,10 @@ async function defineTables(): Promise<void> {
     owner_id: { type: "TEXT", default: "" },
     allow_chat: { type: "INTEGER", default: 1 },
     forward_to_qq: { type: "INTEGER", default: 1 },
+    source_game: { type: "INTEGER", default: 1 },
+    source_qq: { type: "INTEGER", default: 0 },
+    source_system: { type: "INTEGER", default: 0 },
+    source_configured: { type: "INTEGER", default: 0 },
     slow_mode: { type: "INTEGER", default: 0 },
     members_json: { type: "TEXT", default: "[]" },
   });
@@ -96,6 +103,9 @@ async function defineTables(): Promise<void> {
     skin_hash: { type: "TEXT", default: "" },
     dirty: { type: "INTEGER", default: 1 },
     updated_at: { type: "INTEGER", default: 0 },
+  });
+  await db.defineTable("sfmc_chat_meta", {
+    id: { type: "TEXT", primary: true },
   });
 }
 
@@ -212,6 +222,7 @@ ModuleRegistry.register({
       });
     },
     async init() {
+      activeLifecycle = true;
       const prefix = await config.get<string>("title_prefix");
       const colors = await config.get<boolean>("color_codes");
       setChatStyle({
@@ -225,16 +236,19 @@ ModuleRegistry.register({
       await defineTables();
       await ensureDefaultChannels();
       startBridgePolling(
-        "qq",
         (await config.get<number>("bridge_poll_ticks")) ?? 600,
       );
       for (const player of world.getAllPlayers()) {
         await warmAvatarCache(player);
         await loadPlayerPreferences(player);
       }
-      registerSystemMsgHandler((player, text) => {
-        void sendSystemMessage(player, text);
+      const removeSystemHandler = registerSystemMsgHandler((player, text) => {
+        if (activeLifecycle) void sendSystemMessage(player, text);
       });
+      systemMsgCleanup =
+        typeof removeSystemHandler === "function"
+          ? removeSystemHandler
+          : () => registerSystemMsgHandler(() => {});
 
       unprovide.push(
         service.provide("chat.openChannelPanel", async (input) => {
@@ -271,17 +285,37 @@ ModuleRegistry.register({
             notifySendFailure(sender, result);
             return result;
           }
-          const sender = findPlayer(String(input.senderId ?? ""));
-          const channelId = String(input.channelId ?? "global");
+          const senderId =
+            typeof input.senderId === "string" ? input.senderId : undefined;
+          const sender = senderId ? findPlayer(senderId) : undefined;
+          if (senderId && !sender)
+            return { ok: false, message: "发送者不在线。" };
+          const channelId =
+            typeof input.channelId === "string"
+              ? input.channelId
+              : await getDefaultSendChannelId();
+          if (!channelId)
+            return {
+              ok: false,
+              message: "尚未配置默认发送频道，请先在频道面板选择。",
+            };
           if (sender) {
-            const result = await deliverChannelMessage(sender, channelId, content);
+            const result = await deliverChannelMessage(
+              sender,
+              channelId,
+              content,
+            );
             notifySendFailure(sender, result);
             return result;
           }
-          // 系统代发
+          // 没有 senderId 才允许兼容旧调用作为全服公告；频道系统消息请用 chat.broadcast 且指定合法频道。
+          if (input.channelId)
+            return {
+              ok: false,
+              message: "系统频道消息请使用 chat.broadcast。",
+            };
           return broadcast({
             content,
-            channelId,
             prefix: String(input.senderName ?? "系统"),
           });
         }),
@@ -322,6 +356,9 @@ ModuleRegistry.register({
       debug.i("CHAT", "init pipeline ready");
     },
     cleanup() {
+      activeLifecycle = false;
+      systemMsgCleanup?.();
+      systemMsgCleanup = undefined;
       unregisterChatUi();
       for (const off of unprovide.splice(0, unprovide.length)) {
         try {

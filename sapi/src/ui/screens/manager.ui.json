@@ -1,8 +1,8 @@
 {
-  "$schema": "https://raw.githubusercontent.com/DogeLakeDev/ScriptsForMinecraftServer/main/modules/sdk/@sfmc-sdk/schemas/ui-screen.v1.schema.json",
+  "$schema": "https://cdn.jsdelivr.net/gh/DogeLakeDev/ScriptsForMinecraftServer@main/modules/sdk/@sfmc-sdk/schemas/ui-screen.v1.schema.json",
   "formatVersion": 1,
   "id": "chat.manager",
-  "name": "chat.manager",
+  "name": "管理",
   "presentation": "reactive",
   "title": "频道管理",
   "load": {
@@ -39,6 +39,10 @@
         "type": "navigate",
         "to": "chat.create"
       }
+    },
+    {
+      "id": "divider-2",
+      "type": "divider"
     },
     {
       "id": "channels",
@@ -91,14 +95,6 @@
     {
       "id": "divider",
       "type": "divider"
-    },
-    {
-      "id": "button",
-      "type": "button",
-      "label": "刷新",
-      "trigger": {
-        "type": "refresh"
-      }
     },
     {
       "id": "back",
