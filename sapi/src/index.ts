@@ -20,7 +20,6 @@ import {
   broadcast,
   clearActiveChannels,
   clearPlayerChatState,
-  deliverChannelMessage,
   ensureDefaultChannels,
   getActiveChannelId,
   getDefaultSendChannelId,
@@ -30,6 +29,7 @@ import {
   notifySendFailure,
   sendSystemMessage,
   sendPrivate,
+  sendToChannel,
   setChatStyle,
   startBridgePolling,
   stopBridgePolling,
@@ -300,11 +300,7 @@ ModuleRegistry.register({
               message: "尚未配置默认发送频道，请先在频道面板选择。",
             };
           if (sender) {
-            const result = await deliverChannelMessage(
-              sender,
-              channelId,
-              content,
-            );
+            const result = await sendToChannel(sender, channelId, content);
             notifySendFailure(sender, result);
             return result;
           }

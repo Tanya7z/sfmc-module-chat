@@ -7,7 +7,6 @@ import {
   createChannel,
   cycleChannel,
   deleteChannel,
-  deliverChannelMessage,
   ensurePrivateChannel,
   findPlayerByName,
   getActiveChannelId,
@@ -20,6 +19,7 @@ import {
   loadChannelHistory,
   notifySendFailure,
   sendPrivate,
+  sendToChannel,
   setActiveChannel,
   toggleSubscription,
   updateChannel,
@@ -62,7 +62,7 @@ function channelTitle(channel: ChannelRecord): string {
 
 /**
  * 频道面板可展示的频道列表。
- * 使用场景：频道面板列出可订阅的公共/自建频道，排除私聊与系统频道。
+ * 使用场景：频道面板列出当前玩家可访问的非私聊频道；受众由 members_json 决定。
  */
 async function listDisplayChannels(actor?: Player): Promise<ChannelRecord[]> {
   return (await getChannels()).filter(
@@ -418,7 +418,7 @@ export async function preparePrivateChannel(
 export async function shareLocation(player: Player): Promise<void> {
   const loc = player.location;
   const content = `${player.dimension.id}:${Math.floor(loc.x)},${Math.floor(loc.y)},${Math.floor(loc.z)}`;
-  const result = await deliverChannelMessage(
+  const result = await sendToChannel(
     player,
     getActiveChannelId(player.id),
     content,

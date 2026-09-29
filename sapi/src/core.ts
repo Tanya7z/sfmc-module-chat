@@ -18,20 +18,20 @@ export const MESSAGES_TABLE = "sfmc_chat_messages";
 export const AVATARS_TABLE = "sfmc_chat_avatars";
 const CHANNEL_SEED_TABLE = "sfmc_chat_meta";
 
-const DEFAULT_CHANNEL = "global";
-const QQ_CHANNEL = "qq";
-/** 已废弃的内置公告频道 id；启动时若仍是无主内置项则删除。 */
-const BUILTIN_ANNOUNCE_CHANNEL_ID = "broadcast";
+const DEFAULT_CHANNEL = "ch_global";
+const QQ_CHANNEL = "ch_qq";
 const activeChannel = new Map<string, string>();
 const subscribedChannels = new Map<string, Set<string>>();
 const slowModeTracker = new Map<string, Map<string, number>>();
 let titlePrefix = "";
 let colorCodes = true;
 let bridgePollRunId: number | undefined;
+let bridgeRetryRunId: number | undefined;
 let bridgeCursor = 0;
 let bridgeCursorId = "";
 let bridgeLastTimestamp = 0;
-let bridgePollInFlight = false;
+let bridgePollInFlightGeneration = -1;
+let bridgeGeneration = 0;
 const deliveredBridgeMessages = new Set<string>();
 const sendLocks = new Set<string>();
 const bridgeCursorTable = "sfmc_chat_meta";
@@ -94,6 +94,7 @@ async function ensureChannel(options: {
    */
   forwardToQQ?: number;
 }): Promise<ChannelRecord> {
+  if (!options.id.startsWith("ch")) throw new Error("频道 ID 必须以 ch 开头。");
   const existing = await getChannel(options.id);
   if (existing) return existing;
   const channel: ChannelRecord = {
@@ -116,6 +117,7 @@ async function ensureChannel(options: {
 }
 
 export async function ensureDefaultChannels(): Promise<void> {
+  await migrateChannelIds();
   const seed = await db.get<{ id: string }>(CHANNEL_SEED_TABLE, "initial-v1");
   if (!seed) {
     if (!(await getChannel(DEFAULT_CHANNEL))) {
@@ -172,19 +174,30 @@ export async function ensureDefaultChannels(): Promise<void> {
       }),
     );
   }
-  // 旧记录在建列时得到默认值；只迁移一次，之后保留管理员的设置。
-  for (const channel of await getChannels()) {
-    if (
-      channel.type === "system" &&
-      channel.owner_id &&
-      (!channel.members_json || channel.members_json === "[]")
-    ) {
+  const sysAudienceMigration = await db.get<{ id: string }>(
+    CHANNEL_SEED_TABLE,
+    "sys-audience-v1",
+  );
+  if (!sysAudienceMigration) {
+    for (const channel of await getChannels()) {
+      if (
+        channel.type !== "system" ||
+        !channel.owner_id ||
+        (channel.members_json && channel.members_json !== "[]")
+      )
+        continue;
       await db.tx(async (tx) =>
         tx.update(CHANNELS_TABLE, channel.id, {
           members_json: JSON.stringify([channel.owner_id]),
         }),
       );
     }
+    await db.tx(async (tx) =>
+      tx.insert(CHANNEL_SEED_TABLE, { id: "sys-audience-v1" }),
+    );
+  }
+  // 旧记录在建列时得到默认值；只迁移一次，之后保留管理员的设置。
+  for (const channel of await getChannels()) {
     if (channel.source_configured === 1) continue;
     const sources =
       channel.id === QQ_CHANNEL
@@ -199,34 +212,96 @@ export async function ensureDefaultChannels(): Promise<void> {
           source_qq: sources.qq,
           source_system: sources.system,
           source_configured: 1,
-          ...(channel.type === "system" &&
-          channel.owner_id &&
-          (!channel.members_json || channel.members_json === "[]")
-            ? { members_json: JSON.stringify([channel.owner_id]) }
-            : {}),
           ...(channel.id === DEFAULT_CHANNEL || channel.id === QQ_CHANNEL
             ? { type: "custom" }
             : {}),
         }),
     );
   }
-  await removeBuiltinAnnouncementChannel();
 }
 
-/**
- * 删除内置「公告」频道（无主、固定 id=broadcast）。
- */
-async function removeBuiltinAnnouncementChannel(): Promise<void> {
-  const channel = await getChannel(BUILTIN_ANNOUNCE_CHANNEL_ID);
-  if (!channel || channel.owner_id) return;
-  const messages = await db.query<MessageRecord>(MESSAGES_TABLE, {
-    where: { eq: ["channel_id", BUILTIN_ANNOUNCE_CHANNEL_ID] },
-  });
+/** 原子迁移旧频道 ID 及引用；只改标识，不删除历史或改变权限。 */
+async function migrateChannelIds(): Promise<void> {
+  const channels = await getChannels();
+  if (channels.every((channel) => channel.id.startsWith("ch"))) return;
   await db.tx(async (tx) => {
-    for (const row of messages) {
-      await tx.delete(MESSAGES_TABLE, row.id);
+    const current = await tx.query<ChannelRecord>(CHANNELS_TABLE);
+    const occupied = new Set(current.map((channel) => channel.id));
+    const mapping = new Map<string, string>();
+    for (const channel of current) {
+      if (channel.id.startsWith("ch")) continue;
+      const next = `ch_${channel.id}`;
+      if (occupied.has(next))
+        throw new Error(`频道 ID 迁移冲突：${channel.id} → ${next}`);
+      occupied.add(next);
+      mapping.set(channel.id, next);
     }
-    await tx.delete(CHANNELS_TABLE, BUILTIN_ANNOUNCE_CHANNEL_ID);
+    for (const channel of current) {
+      const next = mapping.get(channel.id);
+      if (!next) continue;
+      // 旧私聊曾把成员编码在 ID 中；改名之前显式保存受众。
+      let members = channel.members_json;
+      if (channel.type === "private") {
+        const parsed: unknown = members ? JSON.parse(members) : [];
+        if (!Array.isArray(parsed))
+          throw new Error("私聊成员数据无效，停止迁移。");
+        if (parsed.length === 0) {
+          if (!channel.id.startsWith("priv_"))
+            throw new Error("无法识别旧私聊成员，停止迁移。");
+          const legacyMembers = channel.id.slice(5).split("_");
+          if (legacyMembers.length !== 2 || legacyMembers.some((id) => !id))
+            throw new Error("旧私聊成员不明确，停止迁移。");
+          members = JSON.stringify(legacyMembers);
+        }
+      }
+      await tx.update(CHANNELS_TABLE, channel.id, {
+        id: next,
+        ...(members ? { members_json: members } : {}),
+      });
+      for (const message of await tx.query<MessageRecord>(MESSAGES_TABLE, {
+        where: { eq: ["channel_id", channel.id] },
+      })) {
+        await tx.update(MESSAGES_TABLE, message.id, { channel_id: next });
+      }
+    }
+    const remap = (id: string) => mapping.get(id) ?? id;
+    const remapList = (raw: string): string => {
+      const ids: unknown = JSON.parse(raw);
+      if (!Array.isArray(ids) || ids.some((id) => typeof id !== "string"))
+        throw new Error("频道引用列表无效，停止迁移。");
+      return JSON.stringify(ids.map(remap));
+    };
+    for (const player of await tx.query<{
+      id: string;
+      active_channel?: string;
+      subscribed_channels?: string;
+    }>("sfmc_players")) {
+      const patch: Record<string, string> = {};
+      if (player.active_channel && mapping.has(player.active_channel))
+        patch.active_channel = remap(player.active_channel);
+      if (player.subscribed_channels) {
+        const updated = remapList(player.subscribed_channels);
+        if (updated !== player.subscribed_channels)
+          patch.subscribed_channels = updated;
+      }
+      if (Object.keys(patch).length)
+        await tx.update("sfmc_players", player.id, patch);
+    }
+    for (const meta of await tx.query<{
+      id: string;
+      channel_id?: string;
+      channel_ids?: string;
+    }>(CHANNEL_SEED_TABLE)) {
+      const patch: Record<string, string> = {};
+      if (meta.channel_id && mapping.has(meta.channel_id))
+        patch.channel_id = remap(meta.channel_id);
+      if (meta.channel_ids) {
+        const updated = remapList(meta.channel_ids);
+        if (updated !== meta.channel_ids) patch.channel_ids = updated;
+      }
+      if (Object.keys(patch).length)
+        await tx.update(CHANNEL_SEED_TABLE, meta.id, patch);
+    }
   });
 }
 
@@ -492,8 +567,8 @@ export async function loadPlayerPreferences(player: Player): Promise<void> {
     const preferredChannel = available.get(preferred);
     const preferredOk =
       preferredChannel &&
-      canSendToChannel(player, preferredChannel) &&
-      ids.has(preferred);
+      canAccessChannel(player, preferredChannel) &&
+      canSendToChannel(player, preferredChannel);
     const fallbackId = [...ids].find((id) => {
       const channel = available.get(id);
       return channel && canSendToChannel(player, channel);
@@ -557,12 +632,14 @@ export async function getDefaultSendChannelId(): Promise<string> {
 /** 轮询并投递 QQ→MC 入站消息；仅消费 qq_ 来源，避免消息回环。 */
 export function startBridgePolling(intervalTicks = 600): void {
   stopBridgePolling();
+  const generation = bridgeGeneration;
   void (async () => {
     const saved = await db.get<{
       id: string;
       cursor: number;
       cursor_id: string;
     }>(bridgeCursorTable, bridgeCursorKey);
+    if (generation !== bridgeGeneration) return;
     if (saved) {
       bridgeCursor = saved.cursor;
       bridgeCursorId = saved.cursor_id;
@@ -573,6 +650,7 @@ export function startBridgePolling(intervalTicks = 600): void {
       );
       const latest: MessageRecord[] = [];
       for (const channel of channels) {
+        if (generation !== bridgeGeneration) return;
         latest.push(
           ...(await db.query<MessageRecord>(MESSAGES_TABLE, {
             where: {
@@ -603,38 +681,55 @@ export function startBridgePolling(intervalTicks = 600): void {
         }),
       );
     }
+    if (generation !== bridgeGeneration) return;
     bridgeLastTimestamp = 0;
     deliveredBridgeMessages.clear();
     bridgePollRunId = system.runInterval(
       () => {
-        void pollBridgeMessages();
+        void pollBridgeMessages(generation);
       },
       Math.max(20, Math.floor(intervalTicks)),
     );
-  })().catch((err) =>
+  })().catch((err) => {
+    if (generation !== bridgeGeneration) return;
     debug.w(
       "CHAT",
       `bridge init: ${err instanceof Error ? err.message : String(err)}`,
-    ),
-  );
+    );
+    bridgeRetryRunId = system.runTimeout(
+      () => {
+        bridgeRetryRunId = undefined;
+        if (generation === bridgeGeneration) startBridgePolling(intervalTicks);
+      },
+      Math.max(20, Math.floor(intervalTicks)),
+    );
+  });
 }
 
 export function stopBridgePolling(): void {
+  bridgeGeneration++;
   if (bridgePollRunId !== undefined) system.clearRun(bridgePollRunId);
+  if (bridgeRetryRunId !== undefined) system.clearRun(bridgeRetryRunId);
   bridgePollRunId = undefined;
+  bridgeRetryRunId = undefined;
   bridgeLastTimestamp = 0;
-  bridgePollInFlight = false;
+  bridgePollInFlightGeneration = -1;
   deliveredBridgeMessages.clear();
 }
 
-async function pollBridgeMessages(): Promise<void> {
-  if (bridgePollInFlight) return;
-  bridgePollInFlight = true;
+async function pollBridgeMessages(generation: number): Promise<void> {
+  if (
+    generation !== bridgeGeneration ||
+    bridgePollInFlightGeneration === generation
+  )
+    return;
+  bridgePollInFlightGeneration = generation;
   try {
     const channels = (await getChannels()).filter(
       (item) => item.source_qq === 1,
     );
     while (true) {
+      if (generation !== bridgeGeneration) return;
       const rows = await db.query<MessageRecord>(MESSAGES_TABLE, {
         where: {
           and: [
@@ -659,8 +754,10 @@ async function pollBridgeMessages(): Promise<void> {
         ],
         limit: 100,
       });
+      if (generation !== bridgeGeneration) return;
       if (!rows.length) break;
       for (const row of rows) {
+        if (generation !== bridgeGeneration) return;
         const channel = channels.find((item) => item.id === row.channel_id);
         if (
           !channel ||
@@ -688,15 +785,17 @@ async function pollBridgeMessages(): Promise<void> {
         }
         if (row.created_at - bridgeLastTimestamp > 5 * 60 * 1000)
           bridgeLastTimestamp = row.created_at;
+        if (generation !== bridgeGeneration) return;
+        await db.tx(async (tx) =>
+          tx.update(bridgeCursorTable, bridgeCursorKey, {
+            cursor: row.created_at,
+            cursor_id: row.id,
+          }),
+        );
+        if (generation !== bridgeGeneration) return;
         deliveredBridgeMessages.add(row.id);
         bridgeCursor = row.created_at;
         bridgeCursorId = row.id;
-        await db.tx(async (tx) =>
-          tx.update(bridgeCursorTable, bridgeCursorKey, {
-            cursor: bridgeCursor,
-            cursor_id: bridgeCursorId,
-          }),
-        );
       }
       if (rows.length < 100) break;
     }
@@ -707,7 +806,8 @@ async function pollBridgeMessages(): Promise<void> {
       `bridge poll: ${err instanceof Error ? err.message : String(err)}`,
     );
   } finally {
-    bridgePollInFlight = false;
+    if (bridgePollInFlightGeneration === generation)
+      bridgePollInFlightGeneration = -1;
   }
 }
 
@@ -881,6 +981,32 @@ export async function deliverChannelMessage(
   }
 }
 
+/** 按目标频道类型分派发送；私聊永远以成员投递，不依赖订阅列表。 */
+export async function sendToChannel(
+  sender: Player,
+  channelId: string,
+  content: string,
+  type = "chat",
+  attachment = "",
+): Promise<ChatSendResult> {
+  const channel = await getChannel(channelId);
+  if (!channel) return sendRejected("频道不存在。");
+  if (channel.type !== "private")
+    return deliverChannelMessage(sender, channelId, content, type, attachment);
+  if (!isPrivateParticipant(channel, sender.id))
+    return sendRejected("你无权访问该私聊。");
+  const target = world
+    .getAllPlayers()
+    .find(
+      (candidate) =>
+        candidate.id !== sender.id &&
+        isPrivateParticipant(channel, candidate.id),
+    );
+  if (!target)
+    return sendRejected("私聊对象当前不在线，消息未发送。", "warning");
+  return sendPrivate(sender, target, content, type, attachment);
+}
+
 export async function sendPrivate(
   sender: Player,
   target: Player,
@@ -954,7 +1080,7 @@ export async function ensurePrivateChannel(
   b: Player,
 ): Promise<ChannelRecord> {
   const ids = [a.id, b.id].sort();
-  const channelId = `priv_${ids[0]}_${ids[1]}`;
+  const channelId = `ch_priv_${ids[0]}_${ids[1]}`;
   const existing = await getChannel(channelId);
   if (existing) return existing;
   const channel = await ensureChannel({
@@ -988,12 +1114,9 @@ function isPrivateParticipant(
       return members.includes(playerId);
     }
   } catch {
-    /* 兼容归档频道，继续按旧 ID 格式精确分段判断 */
+    /* 无效受众不允许访问。旧 ID 的受众由启动迁移显式保存。 */
   }
-  return (
-    channel.id.startsWith("priv_") &&
-    channel.id.slice(5).split("_").includes(playerId)
-  );
+  return false;
 }
 
 function canAccessChannel(player: Player, channel: ChannelRecord): boolean {
@@ -1092,8 +1215,22 @@ export async function sendSystemMessage(
   content: string,
 ): Promise<void> {
   const channel = (await getChannels()).find((candidate) => {
-    if (candidate.source_system !== 1) return false;
-    return canAccessChannel(player, candidate);
+    if (
+      candidate.source_system !== 1 ||
+      !candidate.members_json ||
+      candidate.members_json === "[]"
+    )
+      return false;
+    try {
+      const audience = JSON.parse(candidate.members_json) as unknown;
+      return (
+        Array.isArray(audience) &&
+        audience.length === 1 &&
+        audience[0] === player.id
+      );
+    } catch {
+      return false;
+    }
   });
   if (!channel) return;
   if (channel.source_system !== 1) return;
@@ -1158,22 +1295,7 @@ export async function handlePlayerChat(
     Msg.warning("尚未选择发送频道，请先在频道面板选择。", player);
     return;
   }
-  const channel = await getChannel(channelId);
-  let result: ChatSendResult;
-  if (channel?.type === "private") {
-    const target = world
-      .getAllPlayers()
-      .find(
-        (candidate) =>
-          candidate.id !== player.id &&
-          isPrivateParticipant(channel, candidate.id),
-      );
-    result = target
-      ? await sendPrivate(player, target, message)
-      : sendRejected("私聊对象当前不在线，消息未发送。", "warning");
-  } else {
-    result = await deliverChannelMessage(player, channelId, message);
-  }
+  const result = await sendToChannel(player, channelId, message);
   notifySendFailure(player, result);
 }
 
