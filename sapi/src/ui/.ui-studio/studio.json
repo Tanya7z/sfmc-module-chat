@@ -1,0 +1,25 @@
+{
+  "services": [
+    "chat.openChannelPanel",
+    "chat.openPrivatePanel",
+    "chat.send",
+    "chat.broadcast",
+    "chat.registerInterceptor",
+    "chat.onMessage",
+    "chat.ui.channels",
+    "chat.ui.setSubscribed",
+    "chat.ui.manager",
+    "chat.ui.channel",
+    "chat.ui.saveChannel",
+    "chat.ui.toggleAllowChat",
+    "chat.ui.setForwardToQQ",
+    "chat.ui.setChannelSource",
+    "chat.ui.deleteChannel",
+    "chat.ui.createChannel",
+    "chat.ui.privateChannels",
+    "chat.ui.activatePrivate",
+    "chat.ui.compose",
+    "chat.ui.onlinePlayers",
+    "chat.ui.invite"
+  ]
+}

@@ -1,8 +1,8 @@
 {
-  "$schema": "https://raw.githubusercontent.com/DogeLakeDev/ScriptsForMinecraftServer/main/modules/sdk/@sfmc-sdk/schemas/ui-screen.v1.schema.json",
+  "$schema": "https://cdn.jsdelivr.net/gh/DogeLakeDev/ScriptsForMinecraftServer@main/modules/sdk/@sfmc-sdk/schemas/ui-screen.v1.schema.json",
   "formatVersion": 1,
   "id": "chat.private",
-  "name": "chat.private",
+  "name": "私聊",
   "presentation": "reactive",
   "title": "私聊",
   "load": {
@@ -72,22 +72,6 @@
       "trigger": {
         "type": "navigate",
         "to": "chat.channels"
-      }
-    },
-    {
-      "id": "button",
-      "type": "button",
-      "label": "刷新",
-      "trigger": {
-        "type": "refresh"
-      }
-    },
-    {
-      "id": "close",
-      "type": "button",
-      "label": "关闭",
-      "trigger": {
-        "type": "close"
       }
     }
   ],

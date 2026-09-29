@@ -61,7 +61,7 @@ describe("chat format", () => {
 });
 
 describe("chat quick switch", () => {
-  it("/c:c 包含本人 SYS，排除私聊与他人系统频道", () => {
+  it("/c:c 候选频道排除私聊；订阅、访问和发送权限由轮换流程检查", () => {
     assert.equal(
       isQuickSwitchChannel({ type: "public", owner_id: "" }, "p1"),
       true,
@@ -76,7 +76,7 @@ describe("chat quick switch", () => {
     );
     assert.equal(
       isQuickSwitchChannel({ type: "system", owner_id: "p2" }, "p1"),
-      false,
+      true,
     );
     assert.equal(
       isQuickSwitchChannel({ type: "private", owner_id: "p1" }, "p1"),
