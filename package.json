@@ -1,6 +1,6 @@
 {
   "name": "@sfmc-bds/module-chat",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "packageManager": "pnpm@10.8.0",
   "type": "module",
   "description": "SAPI module: 聊天管道中枢",

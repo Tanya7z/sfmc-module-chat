@@ -4,8 +4,6 @@
   "id": "chat",
   "name": "Chat",
   "configKey": "chat",
-  "enabledByDefault": true,
-  "canDisable": true,
   "requires": [],
   "permissions": [
     "config:read:chat",

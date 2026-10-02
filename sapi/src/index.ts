@@ -106,6 +106,10 @@ async function defineTables(): Promise<void> {
   });
   await db.defineTable("sfmc_chat_meta", {
     id: { type: "TEXT", primary: true },
+    channel_ids: { type: "TEXT", default: "[]" },
+    channel_id: { type: "TEXT", default: "" },
+    cursor: { type: "INTEGER", default: 0 },
+    cursor_id: { type: "TEXT", default: "" },
   });
 }
 

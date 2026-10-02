@@ -145,20 +145,6 @@
           "playerId": "{{player.id}}"
         }
       },
-      "activateChannel": {
-        "call": {
-          "service": "chat.ui.activateChannel",
-          "input": { "playerId": "{{player.id}}" }
-        },
-        "onSuccess": [{ "effect": "refresh" }],
-        "onError": [
-          {
-            "effect": "message",
-            "text": "切换失败：{{result.message}}",
-            "tone": "danger"
-          }
-        ]
-      },
       "onSuccess": [
         {
           "effect": "refresh"
@@ -172,6 +158,20 @@
         },
         {
           "effect": "refresh"
+        }
+      ]
+    },
+    "activateChannel": {
+      "call": {
+        "service": "chat.ui.activateChannel",
+        "input": { "playerId": "{{player.id}}" }
+      },
+      "onSuccess": [{ "effect": "refresh" }],
+      "onError": [
+        {
+          "effect": "message",
+          "text": "切换失败：{{result.message}}",
+          "tone": "danger"
         }
       ]
     }
